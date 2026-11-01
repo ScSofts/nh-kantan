@@ -58,4 +58,12 @@ public class CurrencyItem {
     public long withdrawCost(int count) {
         return Money.ceil(count * withdrawValue * (1.0D + withdrawFee));
     }
+
+    /** The largest item count, at most {@code limit}, whose withdrawal cost does not exceed {@code balance}. */
+    public int affordable(long balance, int limit) {
+        if (!canWithdraw() || balance <= 0) return 0;
+        long count = (long) Math.min(limit, balance / (withdrawValue * (1.0D + withdrawFee)));
+        while (count > 0 && withdrawCost((int) count) > balance) count--;
+        return (int) count;
+    }
 }

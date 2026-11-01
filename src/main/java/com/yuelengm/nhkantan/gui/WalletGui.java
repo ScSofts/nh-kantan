@@ -26,7 +26,8 @@ import com.cleanroommc.modularui.screen.UISettings;
 import com.cleanroommc.modularui.utils.Alignment;
 import com.cleanroommc.modularui.utils.item.ItemStackHandler;
 import com.cleanroommc.modularui.value.BoolValue;
-import com.cleanroommc.modularui.value.sync.IntSyncValue;
+import com.cleanroommc.modularui.value.IntValue;
+import com.cleanroommc.modularui.value.ObjectValue;
 import com.cleanroommc.modularui.value.sync.InteractionSyncHandler;
 import com.cleanroommc.modularui.value.sync.LongSyncValue;
 import com.cleanroommc.modularui.value.sync.PanelSyncManager;
@@ -59,7 +60,8 @@ import cpw.mods.fml.relauncher.SideOnly;
  * lets the player choose a quantity below and exchange it.
  * <p>
  * Built identically on client and server. Actions run on the server through {@link InteractionSyncHandler}s; the
- * balance comes from a server-driven {@link LongSyncValue}; the selection and quantity are synced client to server.
+ * balance comes from a server-driven {@link LongSyncValue}; selection and quantity are client-only;
+ * withdrawing sends one request with item and quantity, which the server validates.
  * While in debt the deposit slots accept debt items for repayment and the exchange list is locked.
  */
 public class WalletGui implements IGuiHolder<GuiData> {
@@ -89,6 +91,8 @@ public class WalletGui implements IGuiHolder<GuiData> {
     private static final int CHECKOUT_HEIGHT = 16;
     private static final int MAX_QUANTITY = 3 * 9 * 64;
     private static final int NO_SELECTION = -1;
+    private static final String WITHDRAW_ACTION = "wallet_withdraw";
+    private static final String WITHDRAWN_ACTION = "wallet_withdrawn";
     private static final int SHIFT_STEP = 10;
 
     @Nullable
@@ -116,10 +120,10 @@ public class WalletGui implements IGuiHolder<GuiData> {
         EntityPlayer player = data.getPlayer();
         settings.canInteractWith(ItemMarketTerminal::isHeldBy);
         WalletState state = new WalletState(player, syncManager);
-        return ModularPanel.defaultPanel("nhkantan_wallet", WIDTH, HEIGHT)
+        return ModularPanel.defaultPanel("nhkantan_wallet").width(WIDTH).coverChildrenHeight()
             .child(
                 Flow.row()
-                    .sizeRel(1f)
+                    .coverChildrenHeight()
                     .padding(PADDING)
                     .childPadding(COLUMN_GAP)
                     .child(leftColumn(state))
@@ -141,12 +145,12 @@ public class WalletGui implements IGuiHolder<GuiData> {
         Flow inv = Flow.column()
             .width(LEFT_WIDTH)
             .coverChildrenHeight()
-            .child(text(IKey.lang("container.inventory")))
+            .child(text(IKey.lang("container.inventory")).fullWidth())
             .child(SlotGroupWidget.playerInventory((index, slot) -> slot));
 
         return Flow.column()
             .width(LEFT_WIDTH)
-            .heightRel(1f)
+            .coverChildrenHeight()
             .childPadding(GAP)
             .child(infoBox(state))
             .child(withdrawRow(state))
@@ -166,18 +170,12 @@ public class WalletGui implements IGuiHolder<GuiData> {
     }
 
     private static Flow withdrawRow(WalletState state) {
-        Flow title = Flow.row()
-            .fullWidth()
-            .height(LINE_HEIGHT)
-            .child(text(IKey.lang("gui.nhkantan.wallet.withdraw")))
-            .child(
-                new TextWidget<>(
-                    IKey.dynamic(
-                        () -> StatCollector.translateToLocalFormatted(
-                            "gui.nhkantan.wallet.withdraw_preview",
-                            (state.cost() > state.balance() ? EnumChatFormatting.RED : "")
-                                + formatAmount(state.cost())))).expanded()
-                                    .setEnabledIf(w -> state.cost() != 0));
+        TextWidget<?> title = text(
+            IKey.dynamic(
+                () -> titleWithAmount(
+                    "gui.nhkantan.wallet.withdraw",
+                    state.cost(),
+                    state.cost() > state.balance() ? EnumChatFormatting.RED : null))).widthRel(1f);
 
         return Flow.column()
             .name("withdrawWidget")
@@ -191,21 +189,34 @@ public class WalletGui implements IGuiHolder<GuiData> {
                     .fullWidth()
                     .height(18)
                     .childPadding(2)
-                    .child(text(IKey.lang("gui.nhkantan.wallet.quantity")).size(SLOT_SIZE, SLOT_SIZE))
-                    .child(stepButton("-", state.quantity, -1))
+                    .child(
+                        new ItemDisplayWidget()
+                            .item(new ObjectValue.Dynamic<>(ItemStack.class, state::selectedStack, null))
+                            .size(SLOT_SIZE))
+                    .child(stepButton("-", state.quantityValue, -1))
                     .child(
                         new TextFieldWidget().expanded()
                             .numbersLong(1, MAX_QUANTITY)
-                            .value(state.quantity))
+                            .value(state.quantityValue)
+                            .autoUpdateOnChange(true))
 
-                    .child(stepButton("+", state.quantity, 1))
+                    .child(stepButton("+", state.quantityValue, 1))
                     .child(
                         new ButtonWidget<>().size(32, 18)
-                            .overlay(IKey.lang("gui.nhkantan.wallet.withdraw_max")))
+                            .overlay(IKey.lang("gui.nhkantan.wallet.withdraw_max"))
+                            .onMousePressed(mouseButton -> {
+                                if (mouseButton != 0) return false;
+                                state.selectMaxQuantity();
+                                return true;
+                            }))
                     .child(
                         new ButtonWidget<>().size(32, 18)
                             .overlay(IKey.lang("gui.nhkantan.wallet.withdraw"))
-                            .syncHandler(serverAction(state::checkout))));
+                            .onMousePressed(mouseButton -> {
+                                if (mouseButton != 0) return false;
+                                state.requestWithdraw();
+                                return true;
+                            })));
     }
 
     private static Flow depositRow(WalletState state) {
@@ -224,16 +235,9 @@ public class WalletGui implements IGuiHolder<GuiData> {
                 .overlay(IKey.lang("gui.nhkantan.wallet.deposit"))
                 .syncHandler(serverAction(state::settleDeposit)));
 
-        Flow title = Flow.row()
-            .fullWidth()
-            .height(LINE_HEIGHT)
-            .child(text(IKey.lang("gui.nhkantan.wallet.deposit")))
-            .child(
-                new TextWidget<>(
-                    IKey.lang(
-                        "gui.nhkantan.wallet.deposit_preview",
-                        () -> new Object[] { formatAmount(state.depositPreview()) })).expanded()
-                            .setEnabledIf(w -> state.depositPreview() != 0));
+        TextWidget<?> title = text(
+            IKey.dynamic(() -> titleWithAmount("gui.nhkantan.wallet.deposit", state.depositPreview(), null)))
+                .widthRel(1f);
 
         return Flow.column()
             .name("depositWidget")
@@ -246,10 +250,8 @@ public class WalletGui implements IGuiHolder<GuiData> {
     }
 
     private static Flow rightColumn(WalletState state) {
-        ListWidget<IWidget, ?> list = new ListWidget<>().width(RIGHT_WIDTH)
-            .height(LIST_HEIGHT)
-            .childSeparator(IIcon.EMPTY_2PX)
-            .setEnabledIf(w -> !state.inDebt());
+        ListWidget<IWidget, ?> list = new ListWidget<>().fullWidth()
+            .childSeparator(IIcon.EMPTY_2PX);
         if (state.currencyItems.isEmpty()) {
             list.child(text(IKey.lang("gui.nhkantan.wallet.no_currency_items"), RIGHT_WIDTH - SCROLLBAR_SPACE));
         }
@@ -258,11 +260,10 @@ public class WalletGui implements IGuiHolder<GuiData> {
         }
         return Flow.column()
             .width(RIGHT_WIDTH)
-            .heightRel(1f)
+            .fullHeight()
             .childPadding(GAP)
-            .collapseDisabledChild()
-            .child(text(IKey.lang("gui.nhkantan.wallet.exchange_list"), RIGHT_WIDTH - CLOSE_BUTTON_SPACE))
-            .child(list);
+            .child(text(IKey.lang("gui.nhkantan.wallet.exchange_list")).fullWidth())
+            .child(list.expanded());
     }
 
     /**
@@ -271,18 +272,16 @@ public class WalletGui implements IGuiHolder<GuiData> {
      */
     private static ToggleButton exchangeRow(WalletState state, int index) {
         CurrencyItem item = state.currencyItems.get(index);
-        int width = RIGHT_WIDTH - SCROLLBAR_SPACE;
-        int textWidth = width - ITEM_SIZE - ROW_PADDING * 3;
         ItemStack stack = item.item()
             .createStack(1);
-        return new ToggleButton().size(width, ITEM_SIZE)
+        return new ToggleButton().fullWidth().height(ITEM_SIZE)
             .value(
                 new BoolValue.Dynamic(
-                    () -> state.selection.getIntValue() == index,
+                    () -> state.selection == index,
                     selected -> { if (selected && item.canWithdraw()) state.select(index); }))
             .child(
                 Flow.row()
-                    .sizeRel(1f)
+                    .sizeRel(1f).padding(2,0)
                     .childPadding(ROW_PADDING)
                     .child(
                         new ItemDisplayWidget().item(stack)
@@ -290,6 +289,13 @@ public class WalletGui implements IGuiHolder<GuiData> {
                             .disableThemeBackground(true)
                             .disableHoverThemeBackground(true))
                     .child(new TextWidget<>(rates(item)).height(ITEM_SIZE)));
+    }
+
+    /** The section title alone, or followed by the amount when it is not zero, e.g. {@code Deposit 6,000 NHC}. */
+    private static String titleWithAmount(String langKey, long amount, @Nullable EnumChatFormatting color) {
+        String title = StatCollector.translateToLocal(langKey);
+        if (amount == 0) return title;
+        return title + " " + (color == null ? "" : color) + formatAmount(amount);
     }
 
     /** {@code +credit} in green when depositable, {@code -cost} in red when withdrawable, per item. */
@@ -309,9 +315,9 @@ public class WalletGui implements IGuiHolder<GuiData> {
         return text.toString();
     }
 
-    /** Changes the quantity on the client; the synced value forwards it to the server. Shift multiplies the step. */
-    private static ButtonWidget<?> stepButton(String label, IntSyncValue quantity, int direction) {
-        return new ButtonWidget<>().size(STEP_BUTTON_WIDTH+1, LINE_HEIGHT + 2)
+    /** Changes the client-only quantity; Shift multiplies the step. */
+    private static ButtonWidget<?> stepButton(String label, IntValue.Dynamic quantity, int direction) {
+        return new ButtonWidget<>().size(STEP_BUTTON_WIDTH + 1, LINE_HEIGHT + 2)
             .overlay(IKey.str(label))
             .addTooltipLine(IKey.lang("gui.nhkantan.wallet.step_hint", SHIFT_STEP))
             .onMousePressed(mouseButton -> {
@@ -368,23 +374,29 @@ public class WalletGui implements IGuiHolder<GuiData> {
         private final List<CurrencyItem> currencyItems = ExchangeItems.currencyItems();
         private final List<DebtItem> debtItems = ExchangeItems.debtItems();
         /** Index of the selected currency item, or {@link #NO_SELECTION}; synced client to server. */
-        private final IntSyncValue selection;
-        private final IntSyncValue quantity;
+        private final PanelSyncManager syncManager;
+        /** Client-only: index of the selected currency item, or {@link #NO_SELECTION}. */
+        private int selection = NO_SELECTION;
+        /** Client-only: quantity to withdraw. */
+        private int quantity = 1;
+        private final IntValue.Dynamic quantityValue = new IntValue.Dynamic(
+            () -> quantity,
+            value -> quantity = clampQuantity(value));
 
         private WalletState(EntityPlayer player, PanelSyncManager syncManager) {
             this.player = player;
+            this.syncManager = syncManager;
             // The server reads the wallet; the client only shows the synced value
             this.balance = new LongSyncValue(() -> 0L, () -> {
                 WalletService service = WalletService.get();
                 return service == null ? 0L : service.balance(player.getUniqueID());
             });
             syncManager.syncValue("wallet_balance", balance);
-            int[] selected = { NO_SELECTION };
-            this.selection = new IntSyncValue(() -> selected[0], value -> selected[0] = value).allowC2S();
-            syncManager.syncValue("wallet_selection", selection);
-            int[] amount = { 1 };
-            this.quantity = new IntSyncValue(() -> amount[0], value -> amount[0] = clampQuantity(value)).allowC2S();
-            syncManager.syncValue("wallet_quantity", quantity);
+            syncManager.registerSyncedAction(
+                WITHDRAW_ACTION,
+                Side.SERVER,
+                packet -> withdraw(packet.readVarIntFromBuffer(), packet.readVarIntFromBuffer()));
+            syncManager.registerSyncedAction(WITHDRAWN_ACTION, Side.CLIENT, packet -> selection = NO_SELECTION);
             syncManager.registerSlotGroup(DEPOSIT_GROUP, DEPOSIT_SLOTS);
             syncManager.addCloseListener(closing -> { if (!closing.worldObj.isRemote) returnDepositSlots(); });
         }
@@ -401,15 +413,35 @@ public class WalletGui implements IGuiHolder<GuiData> {
             return inDebt() ? findDebtItem(stack) != null : findDepositItem(stack) != null;
         }
 
+        /** Changes the selected item; the chosen quantity is kept. */
         private void select(int index) {
-            selection.setIntValue(index);
-            quantity.setIntValue(1);
+            selection = index;
         }
 
-        /** The selected withdrawable item, or {@code null}; indices from the client are validated here. */
+        /** Client: sets the quantity to the most the balance affords for the selected item. */
+        private void selectMaxQuantity() {
+            CurrencyItem item = selected();
+            if (item != null) quantity = clampQuantity(item.affordable(balance(), MAX_QUANTITY));
+        }
+
+        /** The selected item for the preview slot, or {@code null} for an empty slot. */
+        @Nullable
+        private ItemStack selectedStack() {
+            CurrencyItem item = selected();
+            return item == null ? null
+                : item.item()
+                    .createStack(1);
+        }
+
+        /** Client: the selected withdrawable item, or {@code null}. */
         @Nullable
         private CurrencyItem selected() {
-            int index = selection.getIntValue();
+            return withdrawable(selection);
+        }
+
+        /** The currency item at {@code index} if it exists and can be withdrawn; validates indices from the client. */
+        @Nullable
+        private CurrencyItem withdrawable(int index) {
             if (index < 0 || index >= currencyItems.size()) return null;
             CurrencyItem item = currencyItems.get(index);
             return item.canWithdraw() ? item : null;
@@ -417,7 +449,7 @@ public class WalletGui implements IGuiHolder<GuiData> {
 
         private long cost() {
             CurrencyItem item = selected();
-            return item == null ? 0L : item.withdrawCost(quantity.getIntValue());
+            return item == null ? 0L : item.withdrawCost(quantity);
         }
 
         @Nullable
@@ -490,19 +522,28 @@ public class WalletGui implements IGuiHolder<GuiData> {
             return item == null ? null : service.deposit(id, item, stack.stackSize);
         }
 
-        /** Server: withdraws the selected quantity into the inventory and clears the selection. */
-        private void checkout() {
+        /** Client: asks the server to withdraw the selected item and quantity. */
+        private void requestWithdraw() {
+            if (selected() == null) return;
+            int index = selection;
+            int count = quantity;
+            syncManager.callSyncedAction(WITHDRAW_ACTION, packet -> {
+                packet.writeVarIntToBuffer(index);
+                packet.writeVarIntToBuffer(count);
+            });
+        }
+
+        /** Server: validates and performs a withdrawal request, then tells the client to clear its selection. */
+        private void withdraw(int index, int count) {
             WalletService service = WalletService.get();
-            CurrencyItem item = selected();
-            if (service == null || item == null) return;
-            int count = quantity.getIntValue();
+            CurrencyItem item = withdrawable(index);
+            if (service == null || item == null || count < 1 || count > MAX_QUANTITY) return;
             if (!PlayerInventories.canFit(player.inventory, Collections.singletonMap(item.item(), count))) return;
             if (!service.withdraw(player.getUniqueID(), item, count)
                 .status()
                 .isSuccess()) return;
             PlayerInventories.give(player, item.item(), count);
-            selection.setIntValue(NO_SELECTION);
-            quantity.setIntValue(1);
+            syncManager.callSyncedAction(WITHDRAWN_ACTION);
         }
 
         private void returnDepositSlots() {
