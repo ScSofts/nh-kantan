@@ -75,9 +75,8 @@ public class WalletGui implements IGuiHolder<GuiData> {
     private static final int LINE_HEIGHT = 10;
     private static final int CLOSE_BUTTON_SPACE = 14;
     private static final int SLOT_SIZE = 18;
-    private static final int DEPOSIT_SLOTS = 4;
+    private static final int DEPOSIT_SLOTS = 9;
     private static final String DEPOSIT_GROUP = "nhkantan_deposit";
-    private static final int INVENTORY_HEIGHT = 76;
     private static final int LIST_HEIGHT = 115;
     private static final int SCROLLBAR_SPACE = 6;
     private static final int ROW_HEIGHT = 20;
@@ -120,8 +119,7 @@ public class WalletGui implements IGuiHolder<GuiData> {
                     .padding(PADDING)
                     .childPadding(COLUMN_GAP)
                     .child(leftColumn(state))
-                    .child(rightColumn(state)))
-            .child(ButtonWidget.panelCloseButton());
+                    .child(rightColumn(state)));
     }
 
     /** Balance with currency name; red with a debt marker when negative. */
@@ -141,17 +139,10 @@ public class WalletGui implements IGuiHolder<GuiData> {
             .heightRel(1f)
             .childPadding(GAP)
             .child(infoBox(state))
-            .child(
-                text(
-                    IKey.lang(
-                        () -> state.inDebt() ? "gui.nhkantan.wallet.repay_slots" : "gui.nhkantan.wallet.deposit_slots"),
-                    LEFT_WIDTH))
+            .child(text(IKey.lang("gui.nhkantan.wallet.deposit_slots"), LEFT_WIDTH))
             .child(depositRow(state))
-            .child(text(IKey.lang("gui.nhkantan.wallet.inventory"), LEFT_WIDTH))
-            .child(
-                SlotGroupWidget.playerInventory((index, slot) -> slot)
-                    .width(LEFT_WIDTH)
-                    .height(INVENTORY_HEIGHT));
+            .child(text(IKey.lang("container.inventory"), LEFT_WIDTH))
+            .child(SlotGroupWidget.playerInventory((index, slot) -> slot));
     }
 
     private static Flow infoBox(WalletState state) {
@@ -163,32 +154,39 @@ public class WalletGui implements IGuiHolder<GuiData> {
             .child(
                 text(
                     IKey.lang("gui.nhkantan.wallet.balance", () -> new Object[] { formatBalance(state.balance()) }),
-                    LEFT_WIDTH))
-            .child(
-                text(
-                    IKey.lang(
-                        () -> state.inDebt() ? "gui.nhkantan.wallet.repay_preview"
-                            : "gui.nhkantan.wallet.deposit_preview",
-                        () -> new Object[] { formatAmount(state.depositPreview()) }),
                     LEFT_WIDTH));
     }
 
     private static Flow depositRow(WalletState state) {
-        Flow row = Flow.row()
-            .width(LEFT_WIDTH)
-            .height(SLOT_SIZE)
-            .childPadding(GAP);
+
+        Flow depositSlotRow = Flow.row()
+            .fullWidth()
+            .height(SLOT_SIZE);
         for (int i = 0; i < DEPOSIT_SLOTS; i++) {
-            row.child(
+            depositSlotRow.child(
                 new ItemSlot().slot(
                     new ModularSlot(state.depositSlots, i).slotGroup(DEPOSIT_GROUP)
                         .filter(state::acceptsDeposit)));
         }
-        int buttonWidth = LEFT_WIDTH - (SLOT_SIZE + GAP) * DEPOSIT_SLOTS;
-        return row.child(
-            new ButtonWidget<>().size(buttonWidth, SLOT_SIZE)
-                .overlay(IKey.lang(() -> state.inDebt() ? "gui.nhkantan.wallet.repay" : "gui.nhkantan.wallet.deposit"))
-                .syncHandler(serverAction(state::settleDeposit)));
+
+        Flow depositConfirmRow = Flow.row()
+            .fullWidth()
+            .height(SLOT_SIZE)
+            .child(
+                new TextWidget<>(
+                    IKey.lang(
+                        "gui.nhkantan.wallet.deposit_preview",
+                        () -> new Object[] { formatAmount(state.depositPreview()) })).expanded())
+            .child(
+                new ButtonWidget<>().size(48, 16)
+                    .overlay(IKey.lang("gui.nhkantan.wallet.deposit"))
+                    .syncHandler(serverAction(state::settleDeposit)));
+
+        return Flow.column()
+            .fullWidth()
+            .coverChildrenHeight()
+            .child(depositSlotRow)
+            .child(depositConfirmRow);
     }
 
     private static Flow rightColumn(WalletState state) {

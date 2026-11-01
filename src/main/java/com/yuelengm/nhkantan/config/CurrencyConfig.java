@@ -14,7 +14,7 @@ import com.yuelengm.nhkantan.NHKantan;
 public class CurrencyConfig {
 
     @Config.Comment("Display name of the market currency.")
-    @Config.DefaultString("市场币")
+    @Config.DefaultString("NHC")
     public static String name;
 
     @Config.Comment("Balance of a newly created player account.")
