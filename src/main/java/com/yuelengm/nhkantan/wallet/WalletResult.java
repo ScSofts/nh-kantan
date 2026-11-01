@@ -15,7 +15,8 @@ public class WalletResult {
         NOT_IN_DEBT,
         NO_ITEMS,
         NOT_EXCHANGEABLE,
-        INSUFFICIENT_BALANCE;
+        INSUFFICIENT_BALANCE,
+        INVENTORY_FULL;
 
         public boolean isSuccess() {
             return this == DEPOSITED || this == WITHDRAWN || this == REPAID;

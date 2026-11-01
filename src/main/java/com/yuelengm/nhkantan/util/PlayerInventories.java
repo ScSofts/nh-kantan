@@ -1,4 +1,4 @@
-package com.yuelengm.nhkantan.wallet;
+package com.yuelengm.nhkantan.util;
 
 import java.util.Map;
 

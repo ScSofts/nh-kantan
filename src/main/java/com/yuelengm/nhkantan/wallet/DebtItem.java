@@ -1,5 +1,7 @@
 package com.yuelengm.nhkantan.wallet;
 
+import com.yuelengm.nhkantan.util.ItemSpec;
+
 /**
  * An item accepted to repay a negative balance. It can never raise the balance above zero.
  */

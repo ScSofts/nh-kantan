@@ -28,10 +28,12 @@ import com.cleanroommc.modularui.widgets.ToggleButton;
 import com.cleanroommc.modularui.widgets.layout.Flow;
 import com.yuelengm.nhkantan.NHKantan;
 import com.yuelengm.nhkantan.gui.WalletGui;
+import com.yuelengm.nhkantan.gui.util.GuiActions;
+import com.yuelengm.nhkantan.gui.util.Widgets;
 import com.yuelengm.nhkantan.market.view.ClientMarketData;
 import com.yuelengm.nhkantan.market.view.PriceFormat;
 import com.yuelengm.nhkantan.market.view.StockView;
-import com.yuelengm.nhkantan.wallet.WalletService;
+import com.yuelengm.nhkantan.wallet.CurrencyFormat;
 
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
@@ -77,11 +79,9 @@ public class ItemMarketTerminal extends Item implements IGuiHolder<PlayerInvento
     @Override
     public ModularPanel buildUI(PlayerInventoryGuiData data, PanelSyncManager syncManager, UISettings settings) {
         EntityPlayer player = data.getPlayer();
-        // Server reads the wallet; the client only shows the synced value
-        LongSyncValue balance = new LongSyncValue(() -> 0L, () -> walletBalance(player));
-        syncManager.syncValue("wallet_balance", balance);
-        InteractionSyncHandler openWallet = new InteractionSyncHandler()
-            .setOnMousePressed(mouse -> { if (!mouse.isClient() && mouse.mouseButton == 0) openWallet(player); });
+        LongSyncValue balance = WalletGui.balanceValue(player);
+        syncManager.syncValue(WalletGui.BALANCE_SYNC_KEY, balance);
+        InteractionSyncHandler openWallet = GuiActions.serverClick(() -> openWallet(player));
 
         ModularPanel panel = ModularPanel.defaultPanel("nhkantan_market_terminal", PANEL_WIDTH, PANEL_HEIGHT);
         Flow column = Flow.column()
@@ -109,11 +109,6 @@ public class ItemMarketTerminal extends Item implements IGuiHolder<PlayerInvento
         return held != null && held.getItem() instanceof ItemMarketTerminal;
     }
 
-    private static long walletBalance(EntityPlayer player) {
-        WalletService service = WalletService.get();
-        return service == null ? 0L : service.balance(player.getUniqueID());
-    }
-
     /** Title on the left; balance and the wallet button on the right, clear of the close button. */
     private static Flow header(LongSyncValue balance, InteractionSyncHandler openWallet) {
         int width = PANEL_WIDTH - PADDING * 2 - CLOSE_BUTTON_SPACE;
@@ -123,17 +118,11 @@ public class ItemMarketTerminal extends Item implements IGuiHolder<PlayerInvento
             .height(TITLE_HEIGHT)
             .childPadding(GAP)
             .child(
-                IKey.lang("gui.nhkantan.market_terminal.title")
-                    .asWidget()
-                    .width(textWidth)
-                    .height(TITLE_HEIGHT)
-                    .textAlign(Alignment.CenterLeft))
+                Widgets.text(IKey.lang("gui.nhkantan.market_terminal.title"), Alignment.CenterLeft)
+                    .size(textWidth, TITLE_HEIGHT))
             .child(
-                IKey.dynamic(() -> WalletGui.formatBalance(balance.getLongValue()))
-                    .asWidget()
-                    .width(textWidth)
-                    .height(TITLE_HEIGHT)
-                    .textAlign(Alignment.CenterRight))
+                Widgets.text(IKey.dynamic(() -> CurrencyFormat.balance(balance.getLongValue())), Alignment.CenterRight)
+                    .size(textWidth, TITLE_HEIGHT))
             .child(
                 new ButtonWidget<>().size(WALLET_BUTTON_WIDTH, TITLE_HEIGHT)
                     .overlay(IKey.lang("gui.nhkantan.wallet.button"))

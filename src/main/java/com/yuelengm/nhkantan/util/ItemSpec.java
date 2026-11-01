@@ -1,4 +1,4 @@
-package com.yuelengm.nhkantan.wallet;
+package com.yuelengm.nhkantan.util;
 
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;

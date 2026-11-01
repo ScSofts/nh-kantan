@@ -1,5 +1,7 @@
 package com.yuelengm.nhkantan.wallet;
 
+import com.yuelengm.nhkantan.util.ItemSpec;
+
 /**
  * An item exchangeable with the market currency. A negative value disables that direction, which allows deposit-only
  * or withdraw-only items. Fees are fractions of the exchanged amount.
