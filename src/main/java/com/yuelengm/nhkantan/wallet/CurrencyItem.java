@@ -1,7 +1,8 @@
 package com.yuelengm.nhkantan.wallet;
 
 /**
- * An item exchangeable with the market currency in both directions. Fees are fractions of the exchanged amount.
+ * An item exchangeable with the market currency. A negative value disables that direction, which allows deposit-only
+ * or withdraw-only items. Fees are fractions of the exchanged amount.
  */
 public class CurrencyItem {
 
@@ -38,6 +39,14 @@ public class CurrencyItem {
 
     public double withdrawFee() {
         return withdrawFee;
+    }
+
+    public boolean canDeposit() {
+        return depositValue >= 0.0D;
+    }
+
+    public boolean canWithdraw() {
+        return withdrawValue >= 0.0D;
     }
 
     /** Currency credited for depositing {@code count} items, after the fee. */

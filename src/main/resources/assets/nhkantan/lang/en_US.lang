@@ -17,14 +17,14 @@ gui.nhkantan.wallet.title=Wallet
 gui.nhkantan.wallet.in_debt=(in debt)
 gui.nhkantan.wallet.balance=Balance: %s
 gui.nhkantan.wallet.deposit_preview=Will credit: %s
-gui.nhkantan.wallet.deposit_slots=Deposit
-gui.nhkantan.wallet.withdraw_list=Withdraw
-gui.nhkantan.wallet.unit_cost=%s each
-gui.nhkantan.wallet.total=Total: %s
+gui.nhkantan.wallet.withdraw_preview=Total: %s
+gui.nhkantan.wallet.withdraw_max=Max
+gui.nhkantan.wallet.exchange_list=Exchange
+gui.nhkantan.wallet.quantity=Quantity
+gui.nhkantan.wallet.withdraw=Withdraw
 gui.nhkantan.wallet.withdraw_locked=Withdrawal is locked while in debt
 gui.nhkantan.wallet.step_hint=Hold Shift for %s at a time
 gui.nhkantan.wallet.deposit=Deposit
-gui.nhkantan.wallet.withdraw=Withdraw
 gui.nhkantan.wallet.no_currency_items=No currency items configured
 gui.nhkantan.wallet.no_debt_items=No debt items configured
 
@@ -62,6 +62,6 @@ nhkantan.currency.initialbalance.tooltip=Balance of a newly created player accou
 nhkantan.exchange=Exchange
 nhkantan.exchange.tooltip=Exchange between market currency and items, and items accepted to repay debt.
 nhkantan.exchange.currencyitems=Currency Items
-nhkantan.exchange.currencyitems.tooltip=Items exchangeable with the market currency in both directions, one per entry:\nmodid:itemName;meta;depositValue;depositFee;withdrawValue;withdrawFee\nValues are market currency per item. Fees are fractions (0.1 = 10%%):\ndepositing credits value x (1 - fee), withdrawing costs value x (1 + fee).
+nhkantan.exchange.currencyitems.tooltip=Items exchangeable with the market currency in both directions, one per entry:\nmodid:itemName;meta;depositValue;depositFee;withdrawValue;withdrawFee\nValues are market currency per item; a negative value disables that direction (deposit-only or withdraw-only). Fees are fractions (0.1 = 10%%):\ndepositing credits value x (1 - fee), withdrawing costs value x (1 + fee).
 nhkantan.exchange.debtitems=Debt Repayment Items
 nhkantan.exchange.debtitems.tooltip=Items accepted to repay a negative balance, one per entry: modid:itemName;meta;value\nvalue: market currency repaid per item. Repayment never raises the balance above 0.

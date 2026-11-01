@@ -15,7 +15,8 @@ public class ExchangeConfig {
 
     @Config.Comment({ "Items exchangeable with the market currency in both directions, one per entry:",
         "modid:itemName;meta;depositValue;depositFee;withdrawValue;withdrawFee",
-        "Values are market currency per item. Fees are fractions of the exchanged amount (0.1 = 10%):",
+        "Values are market currency per item; a negative value disables that direction (deposit-only or",
+        "withdraw-only items). Fees are fractions of the exchanged amount (0.1 = 10%):",
         "depositing credits value x (1 - fee), withdrawing costs value x (1 + fee)." })
     @Config.DefaultStringList({ "minecraft:diamond;0;100;0;100;0.1" })
     public static String[] currencyItems;

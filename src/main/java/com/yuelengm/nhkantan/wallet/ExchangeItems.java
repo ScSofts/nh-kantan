@@ -81,10 +81,13 @@ public class ExchangeItems {
     }
 
     private static CurrencyItem parseCurrency(ItemSpec item, String[] parts) {
-        double depositValue = parsePositive(parts[2], "depositValue");
+        double depositValue = parseValue(parts[2], "depositValue");
         double depositFee = parseFraction(parts[3], "depositFee", 1.0D);
-        double withdrawValue = parsePositive(parts[4], "withdrawValue");
+        double withdrawValue = parseValue(parts[4], "withdrawValue");
         double withdrawFee = parseFraction(parts[5], "withdrawFee", Double.MAX_VALUE);
+        if (depositValue < 0.0D && withdrawValue < 0.0D) {
+            throw new IllegalArgumentException("depositValue and withdrawValue are both disabled");
+        }
         return new CurrencyItem(item, depositValue, depositFee, withdrawValue, withdrawFee);
     }
 
@@ -100,6 +103,13 @@ public class ExchangeItems {
         } catch (NumberFormatException e) {
             throw new IllegalArgumentException("meta is not a whole number: " + text);
         }
+    }
+
+    /** A positive value, or a negative one meaning the direction is disabled; zero is rejected. */
+    private static double parseValue(String text, String name) {
+        double value = parseDouble(text, name);
+        if (value == 0.0D) throw new IllegalArgumentException(name + " must not be 0; use a negative value to disable");
+        return value;
     }
 
     private static double parsePositive(String text, String name) {

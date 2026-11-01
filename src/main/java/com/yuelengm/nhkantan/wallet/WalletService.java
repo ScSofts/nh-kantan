@@ -1,6 +1,5 @@
 package com.yuelengm.nhkantan.wallet;
 
-import java.util.Map;
 import java.util.UUID;
 
 import javax.annotation.Nullable;
@@ -64,6 +63,7 @@ public class WalletService {
     public WalletResult deposit(UUID player, CurrencyItem item, int count) {
         long balance = balance(player);
         if (balance < 0) return WalletResult.failure(Status.IN_DEBT, balance);
+        if (!item.canDeposit()) return WalletResult.failure(Status.NOT_EXCHANGEABLE, balance);
         if (count <= 0) return WalletResult.failure(Status.NO_ITEMS, balance);
         long credit = item.depositCredit(count);
         long updated = saturatedAdd(balance, credit);
@@ -86,32 +86,19 @@ public class WalletService {
     }
 
     /**
-     * Charges a whole withdrawal order at once, or nothing if the balance does not cover it. The caller checks that the
-     * items fit before calling and hands them out on success.
+     * Charges the withdrawal of {@code count} items, or nothing if the balance does not cover it. The caller checks
+     * that the items fit before calling and hands them out on success.
      */
-    public WalletResult withdraw(UUID player, Map<CurrencyItem, Integer> order) {
+    public WalletResult withdraw(UUID player, CurrencyItem item, int count) {
         long balance = balance(player);
         if (balance < 0) return WalletResult.failure(Status.IN_DEBT, balance);
-        long cost = orderCost(order);
-        int count = 0;
-        for (int amount : order.values()) count += amount;
-        if (count <= 0) return WalletResult.failure(Status.EMPTY_ORDER, balance);
+        if (!item.canWithdraw()) return WalletResult.failure(Status.NOT_EXCHANGEABLE, balance);
+        if (count <= 0) return WalletResult.failure(Status.NO_ITEMS, balance);
+        long cost = item.withdrawCost(count);
         if (cost > balance) return WalletResult.failure(Status.INSUFFICIENT_BALANCE, balance);
         long updated = balance - cost;
         data.set(player, updated);
         return new WalletResult(Status.WITHDRAWN, count, cost, updated);
-    }
-
-    /** Total cost of an order; each line is rounded on its own, exactly as the GUI shows it. */
-    public static long orderCost(Map<CurrencyItem, Integer> order) {
-        long cost = 0;
-        for (Map.Entry<CurrencyItem, Integer> line : order.entrySet()) {
-            if (line.getValue() > 0) cost = saturatedAdd(
-                cost,
-                line.getKey()
-                    .withdrawCost(line.getValue()));
-        }
-        return cost;
     }
 
     private static long saturatedAdd(long a, long b) {

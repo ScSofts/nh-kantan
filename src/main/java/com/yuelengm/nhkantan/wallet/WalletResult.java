@@ -14,7 +14,7 @@ public class WalletResult {
         IN_DEBT,
         NOT_IN_DEBT,
         NO_ITEMS,
-        EMPTY_ORDER,
+        NOT_EXCHANGEABLE,
         INSUFFICIENT_BALANCE;
 
         public boolean isSuccess() {

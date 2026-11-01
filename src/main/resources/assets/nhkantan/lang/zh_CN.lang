@@ -17,14 +17,14 @@ gui.nhkantan.wallet.title=钱包
 gui.nhkantan.wallet.in_debt=（负债）
 gui.nhkantan.wallet.balance=余额：%s
 gui.nhkantan.wallet.deposit_preview=到账：%s
-gui.nhkantan.wallet.deposit_slots=存入
-gui.nhkantan.wallet.withdraw_list=交易列表
-gui.nhkantan.wallet.unit_cost=%s / 个
-gui.nhkantan.wallet.total=合计：%s
+gui.nhkantan.wallet.withdraw_preview=合计：%s
+gui.nhkantan.wallet.withdraw_max=全部
+gui.nhkantan.wallet.exchange_list=兑换列表
+gui.nhkantan.wallet.quantity=数量
+gui.nhkantan.wallet.withdraw=取出
 gui.nhkantan.wallet.withdraw_locked=负债中，无法兑换
 gui.nhkantan.wallet.step_hint=按住 Shift 每次 %s 个
 gui.nhkantan.wallet.deposit=存入
-gui.nhkantan.wallet.withdraw=取出
 gui.nhkantan.wallet.no_currency_items=未配置兑换货币
 gui.nhkantan.wallet.no_debt_items=未配置还债物品
 
@@ -62,6 +62,6 @@ nhkantan.currency.initialbalance.tooltip=新玩家账户创建时的余额。
 nhkantan.exchange=兑换
 nhkantan.exchange.tooltip=市场币与物品之间的兑换，以及可用于还债的物品。
 nhkantan.exchange.currencyitems=兑换货币
-nhkantan.exchange.currencyitems.tooltip=可与市场币双向兑换的物品，每条一项：\n模组ID:物品名;元数据;存入价值;存入手续费;取出价值;取出手续费\n价值为每个物品对应的市场币。手续费为兑换金额的比例（0.1 = 10%%）：\n存入到账 价值 × (1 - 手续费)，取出花费 价值 × (1 + 手续费)。
+nhkantan.exchange.currencyitems.tooltip=可与市场币双向兑换的物品，每条一项：\n模组ID:物品名;元数据;存入价值;存入手续费;取出价值;取出手续费\n价值为每个物品对应的市场币，填负数表示禁用该方向（仅存入或仅取出）。手续费为兑换金额的比例（0.1 = 10%%）：\n存入到账 价值 × (1 - 手续费)，取出花费 价值 × (1 + 手续费)。
 nhkantan.exchange.debtitems=还债物品
 nhkantan.exchange.debtitems.tooltip=可用于偿还负余额的物品，每条一项：模组ID:物品名;元数据;价值\n价值：每个物品偿还的市场币数。还债最多使余额回到 0。
