@@ -394,6 +394,7 @@ public class WalletGui implements IGuiHolder<GuiData> {
                 PlayerInventories.returnToPlayer(player, depositSlots.getStackInSlot(i));
                 depositSlots.setStackInSlot(i, null);
             }
+            PlayerInventories.resync(player);
         }
     }
 }

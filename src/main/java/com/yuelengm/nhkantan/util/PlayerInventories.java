@@ -1,6 +1,7 @@
 package com.yuelengm.nhkantan.util;
 
 import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.entity.player.InventoryPlayer;
 import net.minecraft.item.ItemStack;
 
@@ -44,6 +45,17 @@ public class PlayerInventories {
         if (stack == null || stack.stackSize <= 0) return;
         player.inventory.addItemStackToInventory(stack);
         if (stack.stackSize > 0) player.dropPlayerItemWithRandomChoice(stack, false);
+    }
+
+    /**
+     * Server: sends the whole player inventory to the client. Needed after changing it while a custom container closes:
+     * the inventory container's change tracking was not updated while the other container was open, so it may see no
+     * difference and never send the changed slots.
+     */
+    public static void resync(EntityPlayer player) {
+        if (player instanceof EntityPlayerMP serverPlayer) {
+            serverPlayer.sendContainerToPlayer(player.inventoryContainer);
+        }
     }
 
     private static int maxStackSize(InventoryPlayer inventory, ItemStack template) {
