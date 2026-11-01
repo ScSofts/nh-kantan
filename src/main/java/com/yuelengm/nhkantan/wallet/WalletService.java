@@ -1,6 +1,5 @@
 package com.yuelengm.nhkantan.wallet;
 
-import java.util.Collections;
 import java.util.UUID;
 
 import javax.annotation.Nullable;
@@ -119,12 +118,14 @@ public class WalletService {
         return result.itemCount();
     }
 
-    /** Charges a withdrawal and puts the items into the player's inventory; refused if they would not all fit. */
-    public WalletResult withdrawToInventory(EntityPlayer player, CurrencyItem item, int count) {
+    /**
+     * Withdraws up to {@code requested} items into the player's inventory, limited to the free space; only the items
+     * actually handed out are charged.
+     */
+    public WalletResult withdrawToInventory(EntityPlayer player, CurrencyItem item, int requested) {
         UUID id = player.getUniqueID();
-        if (!PlayerInventories.canFit(player.inventory, Collections.singletonMap(item.item(), count))) {
-            return WalletResult.failure(Status.INVENTORY_FULL, balance(id));
-        }
+        int count = Math.min(requested, PlayerInventories.freeSpace(player.inventory, item.item()));
+        if (count <= 0) return WalletResult.failure(Status.INVENTORY_FULL, balance(id));
         WalletResult result = withdraw(id, item, count);
         if (result.status()
             .isSuccess()) PlayerInventories.give(player, item.item(), count);

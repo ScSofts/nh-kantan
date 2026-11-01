@@ -87,7 +87,6 @@ public class WalletGui implements IGuiHolder<GuiData> {
     private static final int SHIFT_STEP = 10;
     private static final int NO_SELECTION = -1;
     private static final String WITHDRAW_ACTION = "wallet_withdraw";
-    private static final String WITHDRAWN_ACTION = "wallet_withdrawn";
 
     @Nullable
     private static SimpleGuiFactory factory;
@@ -318,7 +317,6 @@ public class WalletGui implements IGuiHolder<GuiData> {
                 WITHDRAW_ACTION,
                 Side.SERVER,
                 packet -> withdraw(packet.readVarIntFromBuffer(), packet.readVarIntFromBuffer()));
-            syncManager.registerSyncedAction(WITHDRAWN_ACTION, Side.CLIENT, packet -> selection = NO_SELECTION);
             syncManager.registerSlotGroup(DEPOSIT_GROUP, DEPOSIT_SLOTS);
             syncManager.addCloseListener(closing -> { if (!closing.worldObj.isRemote) returnDepositSlots(); });
         }
@@ -372,16 +370,12 @@ public class WalletGui implements IGuiHolder<GuiData> {
             });
         }
 
-        /** Server: validates and performs a withdrawal request, then tells the client to clear its selection. */
+        /** Server: validates and performs a withdrawal request; the client keeps its selection. */
         private void withdraw(int index, int count) {
             WalletService service = WalletService.get();
             CurrencyItem item = ExchangeItems.withdrawable(index);
             if (service == null || item == null || count < 1 || count > MAX_QUANTITY) return;
-            if (service.withdrawToInventory(player, item, count)
-                .status()
-                .isSuccess()) {
-                syncManager.callSyncedAction(WITHDRAWN_ACTION);
-            }
+            service.withdrawToInventory(player, item, count);
         }
 
         /** Server: hands in the slot contents; whatever is not accepted stays in the slots. */

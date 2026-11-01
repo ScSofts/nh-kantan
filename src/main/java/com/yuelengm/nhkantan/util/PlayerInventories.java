@@ -1,7 +1,5 @@
 package com.yuelengm.nhkantan.util;
 
-import java.util.Map;
-
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.InventoryPlayer;
 import net.minecraft.item.ItemStack;
@@ -13,29 +11,22 @@ public class PlayerInventories {
 
     private PlayerInventories() {}
 
-    /** Whether all items of the order fit at once; different item types compete for the same empty slots. */
-    public static boolean canFit(InventoryPlayer inventory, Map<ItemSpec, Integer> items) {
-        int emptySlots = 0;
+    /** How many items of this type still fit: free room in matching stacks plus empty slots. */
+    public static int freeSpace(InventoryPlayer inventory, ItemSpec item) {
+        ItemStack template = item.createStack(1);
+        int max = maxStackSize(inventory, template);
+        long space = 0;
         for (ItemStack stack : inventory.mainInventory) {
-            if (stack == null) emptySlots++;
-        }
-        for (Map.Entry<ItemSpec, Integer> entry : items.entrySet()) {
-            ItemStack template = entry.getKey()
-                .createStack(1);
-            int max = maxStackSize(inventory, template);
-            long remaining = entry.getValue();
-            for (ItemStack stack : inventory.mainInventory) {
-                if (stack != null && stack.isItemEqual(template) && !stack.hasTagCompound()) {
-                    remaining -= Math.max(0, max - stack.stackSize);
-                }
+            if (stack == null) {
+                space += max;
+            } else if (stack.isItemEqual(template) && !stack.hasTagCompound()) {
+                space += Math.max(0, max - stack.stackSize);
             }
-            if (remaining > 0) emptySlots -= (int) ((remaining + max - 1) / max);
-            if (emptySlots < 0) return false;
         }
-        return true;
+        return (int) Math.min(Integer.MAX_VALUE, space);
     }
 
-    /** Inserts {@code amount} items; callers check {@link #canFit} first, anything left over is dropped. */
+    /** Inserts {@code amount} items; callers check {@link #freeSpace} first, anything left over is dropped. */
     public static void give(EntityPlayer player, ItemSpec item, int amount) {
         InventoryPlayer inventory = player.inventory;
         int max = maxStackSize(inventory, item.createStack(1));
