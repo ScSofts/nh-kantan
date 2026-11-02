@@ -59,7 +59,7 @@ nhkantan.currency.initialbalance.tooltip=Balance of a newly created player accou
 nhkantan.exchange=Exchange
 nhkantan.exchange.tooltip=Exchange between market currency and items, and items accepted to repay debt.
 nhkantan.exchange.currencyitems=Currency Items
-nhkantan.exchange.currencyitems.tooltip=Items exchangeable with the market currency in both directions, one per entry:\nmodid:itemName;meta;depositValue;depositFee;withdrawValue;withdrawFee\nValues are market currency per item; a negative value disables that direction (deposit-only or withdraw-only). Fees are fractions (0.1 = 10%%):\ndepositing credits value x (1 - fee), withdrawing costs value x (1 + fee).
+nhkantan.exchange.currencyitems.tooltip=Items exchangeable with the market currency, one per entry:\nmodid:itemName;meta;depositValue;withdrawValue\n0 or negative value disables that direction (deposit-only or withdraw-only).
 nhkantan.exchange.debtitems=Debt Repayment Items
 nhkantan.exchange.debtitems.tooltip=Items accepted to repay a negative balance, one per entry: modid:itemName;meta;value\nvalue: market currency repaid per item. Repayment never raises the balance above 0.
 nhkantan.compat=Compatibility
@@ -67,12 +67,8 @@ nhkantan.compat.tooltip=Integration with other mods.
 nhkantan.compat.gtnhcoins=GTNH Coins
 nhkantan.compat.gtnhcoins.tooltip=Adds the GTNH quest coins to the exchange and debt lists.\nEach coin type is listed once; all its sizes (1, 10, 100, 1000 and 10000 coins) are accepted.\nWithdrawals are paid out in the largest coins.
 nhkantan.compat.gtnhcoindepositvalue=Coin Deposit Value
-nhkantan.compat.gtnhcoindepositvalue.tooltip=Market currency credited per base coin. Negative disables depositing.
-nhkantan.compat.gtnhcoindepositfee=Coin Deposit Fee
-nhkantan.compat.gtnhcoindepositfee.tooltip=Fraction of the amount (0.1 = 10%%).
+nhkantan.compat.gtnhcoindepositvalue.tooltip=Market currency credited per base coin. 0 or negative disables depositing.
 nhkantan.compat.gtnhcoinwithdrawvalue=Coin Withdraw Value
-nhkantan.compat.gtnhcoinwithdrawvalue.tooltip=Market currency charged per base coin. Negative disables withdrawing.
-nhkantan.compat.gtnhcoinwithdrawfee=Coin Withdraw Fee
-nhkantan.compat.gtnhcoinwithdrawfee.tooltip=Fraction of the amount (0.1 = 10%%).
+nhkantan.compat.gtnhcoinwithdrawvalue.tooltip=Market currency charged per base coin. 0 or negative disables withdrawing.
 nhkantan.compat.gtnhcoindebtvalue=Coin Debt Value
 nhkantan.compat.gtnhcoindebtvalue.tooltip=Debt repaid per base coin. 0 or negative disables repaying with coins.

@@ -70,8 +70,7 @@ public class GtnhCoinProvider implements ExchangeProvider {
 
     private void refresh() {
         double[] current = { CompatConfig.gtnhCoins ? 1.0D : 0.0D, CompatConfig.gtnhCoinDepositValue,
-            CompatConfig.gtnhCoinDepositFee, CompatConfig.gtnhCoinWithdrawValue, CompatConfig.gtnhCoinWithdrawFee,
-            CompatConfig.gtnhCoinDebtValue };
+            CompatConfig.gtnhCoinWithdrawValue, CompatConfig.gtnhCoinDebtValue };
         if (Arrays.equals(current, source)) return;
         source = current;
         List<CurrencyItem> currency = new ArrayList<>();
@@ -89,12 +88,7 @@ public class GtnhCoinProvider implements ExchangeProvider {
             if (coins == null) continue;
             if (exchangeable) {
                 currency.add(
-                    new CurrencyItem(
-                        coins,
-                        CompatConfig.gtnhCoinDepositValue,
-                        CompatConfig.gtnhCoinDepositFee,
-                        CompatConfig.gtnhCoinWithdrawValue,
-                        CompatConfig.gtnhCoinWithdrawFee));
+                    new CurrencyItem(coins, CompatConfig.gtnhCoinDepositValue, CompatConfig.gtnhCoinWithdrawValue));
             }
             if (repayable) debt.add(new DebtItem(coins, CompatConfig.gtnhCoinDebtValue));
         }

@@ -21,14 +21,14 @@ public class ConfigExchangeProvider implements ExchangeProvider {
     private List<DebtItem> debtItems = Collections.emptyList();
 
     /**
-     * Entries of {@code currencyItems}: {@code modid:itemName;meta;depositValue;depositFee;withdrawValue;withdrawFee}
+     * Entries of {@code currencyItems}: {@code modid:itemName;meta;depositValue;withdrawValue}
      */
     @Override
     public synchronized List<CurrencyItem> currencyItems() {
         String[] source = ExchangeConfig.currencyItems;
         if (source != currencySource) {
             currencySource = source;
-            currencyItems = ConfigEntries.parseEntries(source, 6, ConfigExchangeProvider::parseCurrency, CONTEXT);
+            currencyItems = ConfigEntries.parseEntries(source, 4, ConfigExchangeProvider::parseCurrency, CONTEXT);
         }
         return currencyItems;
     }
@@ -46,16 +46,14 @@ public class ConfigExchangeProvider implements ExchangeProvider {
 
     private static CurrencyItem parseCurrency(String[] fields) {
         double depositValue = parseValue(fields[2], "depositValue");
-        double withdrawValue = parseValue(fields[4], "withdrawValue");
+        double withdrawValue = parseValue(fields[3], "withdrawValue");
         if (depositValue < 0.0D && withdrawValue < 0.0D) {
             throw new IllegalArgumentException("depositValue and withdrawValue are both disabled");
         }
         return new CurrencyItem(
             Denominations.single(ConfigEntries.parseItem(fields[0], fields[1])),
             depositValue,
-            ConfigEntries.parseFraction(fields[3], "depositFee", 1.0D),
-            withdrawValue,
-            ConfigEntries.parseFraction(fields[5], "withdrawFee", Double.MAX_VALUE));
+            withdrawValue);
     }
 
     private static DebtItem parseDebt(String[] fields) {

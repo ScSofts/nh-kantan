@@ -6,24 +6,18 @@ import com.yuelengm.nhkantan.util.Denominations;
 
 /**
  * An item family (see {@link Denominations}) exchangeable with the market currency, priced per base unit. A negative
- * value disables that direction, which allows deposit-only or withdraw-only items. Fees are fractions of the exchanged
- * amount.
+ * value disables that direction, which allows deposit-only or withdraw-only items.
  */
 public class CurrencyItem {
 
     private final Denominations items;
     private final double depositValue;
-    private final double depositFee;
     private final double withdrawValue;
-    private final double withdrawFee;
 
-    public CurrencyItem(Denominations items, double depositValue, double depositFee, double withdrawValue,
-        double withdrawFee) {
+    public CurrencyItem(Denominations items, double depositValue, double withdrawValue) {
         this.items = items;
         this.depositValue = depositValue;
-        this.depositFee = depositFee;
         this.withdrawValue = withdrawValue;
-        this.withdrawFee = withdrawFee;
     }
 
     /** The item family exchanged; amounts and values are in its base units. */
@@ -41,34 +35,26 @@ public class CurrencyItem {
         return depositValue;
     }
 
-    public double depositFee() {
-        return depositFee;
-    }
-
     public double withdrawValue() {
         return withdrawValue;
     }
 
-    public double withdrawFee() {
-        return withdrawFee;
-    }
-
     public boolean canDeposit() {
-        return depositValue >= 0.0D;
+        return depositValue > 0.0D;
     }
 
     public boolean canWithdraw() {
-        return withdrawValue >= 0.0D;
+        return withdrawValue > 0.0D;
     }
 
-    /** Cents credited for depositing {@code units} base units, after the fee. */
+    /** Cents credited for depositing {@code units} base units. Rounded down. */
     public long depositCredit(int units) {
-        return Money.floorCents(units * depositValue * (1.0D - depositFee));
+        return Money.floorCents(units * depositValue);
     }
 
-    /** Cents charged for withdrawing {@code units} base units, including the fee. */
+    /** Cents charged for withdrawing {@code units} base units. Rounded up. */
     public long withdrawCost(int units) {
-        return Money.ceilCents(units * withdrawValue * (1.0D + withdrawFee));
+        return Money.ceilCents(units * withdrawValue);
     }
 
     /**
@@ -77,7 +63,7 @@ public class CurrencyItem {
      */
     public int affordable(long balance, int limit) {
         if (!canWithdraw() || balance <= 0) return 0;
-        long count = (long) Math.min(limit, balance / (withdrawValue * (1.0D + withdrawFee) * Money.CENTS_PER_UNIT));
+        long count = (long) Math.min(limit, balance / (withdrawValue * Money.CENTS_PER_UNIT));
         while (count > 0 && withdrawCost((int) count) > balance) count--;
         return (int) count;
     }
