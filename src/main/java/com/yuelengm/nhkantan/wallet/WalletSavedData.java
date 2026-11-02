@@ -9,13 +9,15 @@ import net.minecraft.world.WorldSavedData;
 
 /**
  * Balances of all players keyed by UUID, stored in the global map storage of the world so they do not depend on the
- * player being online. Balances are whole units of market currency and may be negative (debt).
+ * player being online. Balances are in cents (see {@link Money}) and may be negative (debt).
  */
 public class WalletSavedData extends WorldSavedData {
 
     public static final String DATA_NAME = "nhkantan_wallets";
 
-    private static final String NBT_BALANCES = "Balances";
+    private static final String NBT_BALANCES = "BalancesCents";
+    /** Older saves stored whole units under this key; they are converted to cents when read. */
+    private static final String NBT_LEGACY_BALANCES = "Balances";
 
     private final Map<UUID, Long> balances = new HashMap<>();
 
@@ -41,10 +43,12 @@ public class WalletSavedData extends WorldSavedData {
     @Override
     public void readFromNBT(NBTTagCompound tag) {
         balances.clear();
-        NBTTagCompound stored = tag.getCompoundTag(NBT_BALANCES);
+        boolean legacy = !tag.hasKey(NBT_BALANCES);
+        NBTTagCompound stored = tag.getCompoundTag(legacy ? NBT_LEGACY_BALANCES : NBT_BALANCES);
         for (String key : stored.func_150296_c()) {
             try {
-                balances.put(UUID.fromString(key), stored.getLong(key));
+                long value = stored.getLong(key);
+                balances.put(UUID.fromString(key), legacy ? Money.cents(value) : value);
             } catch (IllegalArgumentException ignored) {
                 // Not a UUID; skip the corrupt entry
             }

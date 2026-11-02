@@ -24,14 +24,14 @@ public class DebtItem {
         return value;
     }
 
-    /** Currency repaid by {@code units} base units. */
+    /** Cents repaid by {@code units} base units. */
     public long repayment(int units) {
-        return Money.floor(units * value);
+        return Money.floorCents(units * value);
     }
 
-    /** Base units needed to clear {@code debt}; the last one may be worth more than what is left. */
+    /** Base units needed to clear {@code debt} cents; the last one may be worth more than what is left. */
     public int unitsToClear(long debt) {
         if (debt <= 0) return 0;
-        return (int) Math.min(Integer.MAX_VALUE, Money.ceil(debt / value));
+        return (int) Math.min(Integer.MAX_VALUE, Money.ceil(debt / (value * Money.CENTS_PER_UNIT)));
     }
 }

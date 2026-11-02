@@ -61,22 +61,23 @@ public class CurrencyItem {
         return withdrawValue >= 0.0D;
     }
 
-    /** Currency credited for depositing {@code units} base units, after the fee. */
+    /** Cents credited for depositing {@code units} base units, after the fee. */
     public long depositCredit(int units) {
-        return Money.floor(units * depositValue * (1.0D - depositFee));
+        return Money.floorCents(units * depositValue * (1.0D - depositFee));
     }
 
-    /** Currency charged for withdrawing {@code units} base units, including the fee. */
+    /** Cents charged for withdrawing {@code units} base units, including the fee. */
     public long withdrawCost(int units) {
-        return Money.ceil(units * withdrawValue * (1.0D + withdrawFee));
+        return Money.ceilCents(units * withdrawValue * (1.0D + withdrawFee));
     }
 
     /**
-     * The largest number of base units, at most {@code limit}, whose withdrawal cost does not exceed {@code balance}.
+     * The largest number of base units, at most {@code limit}, whose withdrawal cost does not exceed {@code balance}
+     * cents.
      */
     public int affordable(long balance, int limit) {
         if (!canWithdraw() || balance <= 0) return 0;
-        long count = (long) Math.min(limit, balance / (withdrawValue * (1.0D + withdrawFee)));
+        long count = (long) Math.min(limit, balance / (withdrawValue * (1.0D + withdrawFee) * Money.CENTS_PER_UNIT));
         while (count > 0 && withdrawCost((int) count) > balance) count--;
         return (int) count;
     }

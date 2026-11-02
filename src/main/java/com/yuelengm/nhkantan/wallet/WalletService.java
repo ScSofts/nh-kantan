@@ -87,7 +87,7 @@ public class WalletService {
 
     /** The balance, creating the account with the configured initial balance on first access. */
     public long balance(UUID player) {
-        if (!data.has(player)) data.set(player, CurrencyConfig.initialBalance);
+        if (!data.has(player)) data.set(player, Money.cents(CurrencyConfig.initialBalance));
         return data.get(player);
     }
 
