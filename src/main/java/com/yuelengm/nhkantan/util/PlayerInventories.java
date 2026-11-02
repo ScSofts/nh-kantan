@@ -1,5 +1,7 @@
 package com.yuelengm.nhkantan.util;
 
+import java.util.Map;
+
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.entity.player.InventoryPlayer;
@@ -12,22 +14,50 @@ public class PlayerInventories {
 
     private PlayerInventories() {}
 
-    /** How many items of this type still fit: free room in matching stacks plus empty slots. */
-    public static int freeSpace(InventoryPlayer inventory, ItemSpec item) {
-        ItemStack template = item.createStack(1);
-        int max = maxStackSize(inventory, template);
-        long space = 0;
-        for (ItemStack stack : inventory.mainInventory) {
-            if (stack == null) {
-                space += max;
-            } else if (stack.isItemEqual(template) && !stack.hasTagCompound()) {
-                space += Math.max(0, max - stack.stackSize);
-            }
+    /**
+     * The largest amount of units, at most {@code requested}, whose split into {@code family} fits into the inventory.
+     * Splits are not monotone in size (more units can need fewer items), so this is the largest fitting value found by
+     * binary search, which is exact for single-item families.
+     */
+    public static int largestFitting(InventoryPlayer inventory, Denominations family, int requested) {
+        int low = 0;
+        int high = requested;
+        while (low < high) {
+            int mid = low + (high - low + 1) / 2;
+            if (canFit(inventory, family.split(mid))) low = mid;
+            else high = mid - 1;
         }
-        return (int) Math.min(Integer.MAX_VALUE, space);
+        return low;
     }
 
-    /** Inserts {@code amount} items; callers check {@link #freeSpace} first, anything left over is dropped. */
+    /** Whether all items fit at once; different item types compete for the same empty slots. */
+    public static boolean canFit(InventoryPlayer inventory, Map<ItemSpec, Integer> items) {
+        int emptySlots = 0;
+        for (ItemStack stack : inventory.mainInventory) {
+            if (stack == null) emptySlots++;
+        }
+        for (Map.Entry<ItemSpec, Integer> entry : items.entrySet()) {
+            ItemStack template = entry.getKey()
+                .createStack(1);
+            int max = maxStackSize(inventory, template);
+            long remaining = entry.getValue();
+            for (ItemStack stack : inventory.mainInventory) {
+                if (stack != null && stack.isItemEqual(template) && !stack.hasTagCompound()) {
+                    remaining -= Math.max(0, max - stack.stackSize);
+                }
+            }
+            if (remaining > 0) emptySlots -= (int) ((remaining + max - 1) / max);
+            if (emptySlots < 0) return false;
+        }
+        return true;
+    }
+
+    /** Inserts all items; callers check {@link #canFit} first, anything left over is dropped. */
+    public static void give(EntityPlayer player, Map<ItemSpec, Integer> items) {
+        for (Map.Entry<ItemSpec, Integer> entry : items.entrySet()) give(player, entry.getKey(), entry.getValue());
+    }
+
+    /** Inserts {@code amount} items; callers check {@link #canFit} first, anything left over is dropped. */
     public static void give(EntityPlayer player, ItemSpec item, int amount) {
         InventoryPlayer inventory = player.inventory;
         int max = maxStackSize(inventory, item.createStack(1));

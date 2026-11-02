@@ -1,30 +1,40 @@
 package com.yuelengm.nhkantan.wallet;
 
-import com.yuelengm.nhkantan.util.ItemSpec;
+import net.minecraft.item.ItemStack;
+
+import com.yuelengm.nhkantan.util.Denominations;
 
 /**
- * An item exchangeable with the market currency. A negative value disables that direction, which allows deposit-only
- * or withdraw-only items. Fees are fractions of the exchanged amount.
+ * An item family (see {@link Denominations}) exchangeable with the market currency, priced per base unit. A negative
+ * value disables that direction, which allows deposit-only or withdraw-only items. Fees are fractions of the exchanged
+ * amount.
  */
 public class CurrencyItem {
 
-    private final ItemSpec item;
+    private final Denominations items;
     private final double depositValue;
     private final double depositFee;
     private final double withdrawValue;
     private final double withdrawFee;
 
-    public CurrencyItem(ItemSpec item, double depositValue, double depositFee, double withdrawValue,
+    public CurrencyItem(Denominations items, double depositValue, double depositFee, double withdrawValue,
         double withdrawFee) {
-        this.item = item;
+        this.items = items;
         this.depositValue = depositValue;
         this.depositFee = depositFee;
         this.withdrawValue = withdrawValue;
         this.withdrawFee = withdrawFee;
     }
 
-    public ItemSpec item() {
-        return item;
+    /** The item family exchanged; amounts and values are in its base units. */
+    public Denominations items() {
+        return items;
+    }
+
+    /** One base-unit item, representing this entry in lists. */
+    public ItemStack displayStack() {
+        return items.base()
+            .createStack(1);
     }
 
     public double depositValue() {
@@ -51,17 +61,19 @@ public class CurrencyItem {
         return withdrawValue >= 0.0D;
     }
 
-    /** Currency credited for depositing {@code count} items, after the fee. */
-    public long depositCredit(int count) {
-        return Money.floor(count * depositValue * (1.0D - depositFee));
+    /** Currency credited for depositing {@code units} base units, after the fee. */
+    public long depositCredit(int units) {
+        return Money.floor(units * depositValue * (1.0D - depositFee));
     }
 
-    /** Currency charged for withdrawing {@code count} items, including the fee. */
-    public long withdrawCost(int count) {
-        return Money.ceil(count * withdrawValue * (1.0D + withdrawFee));
+    /** Currency charged for withdrawing {@code units} base units, including the fee. */
+    public long withdrawCost(int units) {
+        return Money.ceil(units * withdrawValue * (1.0D + withdrawFee));
     }
 
-    /** The largest item count, at most {@code limit}, whose withdrawal cost does not exceed {@code balance}. */
+    /**
+     * The largest number of base units, at most {@code limit}, whose withdrawal cost does not exceed {@code balance}.
+     */
     public int affordable(long balance, int limit) {
         if (!canWithdraw() || balance <= 0) return 0;
         long count = (long) Math.min(limit, balance / (withdrawValue * (1.0D + withdrawFee)));

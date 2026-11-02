@@ -12,7 +12,6 @@ import net.minecraft.util.EnumChatFormatting;
 import net.minecraft.util.StatCollector;
 
 import com.cleanroommc.modularui.api.IGuiHolder;
-import com.cleanroommc.modularui.api.drawable.IIcon;
 import com.cleanroommc.modularui.api.drawable.IKey;
 import com.cleanroommc.modularui.api.widget.IWidget;
 import com.cleanroommc.modularui.factory.GuiData;
@@ -69,6 +68,7 @@ public class WalletGui implements IGuiHolder<GuiData> {
 
     private static final int PADDING = 7;
     private static final int GAP = 3;
+    private static final int TITLE_GAP = 1;
     private static final int COLUMN_GAP = 8;
     private static final int LEFT_WIDTH = 162;
     private static final int RIGHT_WIDTH = 150;
@@ -83,7 +83,8 @@ public class WalletGui implements IGuiHolder<GuiData> {
     private static final int STEP_BUTTON_WIDTH = 11;
     private static final int STEP_BUTTON_HEIGHT = Widgets.LINE_HEIGHT + 2;
     private static final int ACTION_BUTTON_WIDTH = 32;
-    private static final int MAX_QUANTITY = 3 * 9 * 64;
+    /** Upper bound of the quantity field, in base units; the server further limits it to what fits. */
+    private static final int MAX_QUANTITY = 999_999;
     private static final int SHIFT_STEP = 10;
     private static final int NO_SELECTION = -1;
     private static final String WITHDRAW_ACTION = "wallet_withdraw";
@@ -133,6 +134,7 @@ public class WalletGui implements IGuiHolder<GuiData> {
         Flow inventory = Flow.column()
             .width(LEFT_WIDTH)
             .coverChildrenHeight()
+            .childPadding(TITLE_GAP)
             .child(
                 Widgets.text(IKey.lang("container.inventory"))
                     .fullWidth())
@@ -168,6 +170,7 @@ public class WalletGui implements IGuiHolder<GuiData> {
             .widthRel(1f);
         IKey stepHint = IKey.lang("gui.nhkantan.wallet.step_hint", SHIFT_STEP);
         return Widgets.section("withdrawWidget", LEFT_WIDTH)
+            .childPadding(TITLE_GAP)
             .child(title)
             .child(
                 Flow.row()
@@ -218,13 +221,13 @@ public class WalletGui implements IGuiHolder<GuiData> {
             .text(IKey.dynamic(() -> titleWithAmount("gui.nhkantan.wallet.deposit", state.depositPreview(), null)))
             .widthRel(1f);
         return Widgets.section("depositWidget", LEFT_WIDTH)
+            .childPadding(TITLE_GAP)
             .child(title)
             .child(slots);
     }
 
     private static Flow rightColumn(WalletState state) {
-        ListWidget<IWidget, ?> list = new ListWidget<>().fullWidth()
-            .childSeparator(IIcon.EMPTY_2PX);
+        ListWidget<IWidget, ?> list = new ListWidget<>().fullWidth();
         List<CurrencyItem> items = ExchangeItems.currencyItems();
         if (items.isEmpty()) {
             list.child(Widgets.text(IKey.lang("gui.nhkantan.wallet.no_currency_items"), RIGHT_WIDTH - SCROLLBAR_SPACE));
@@ -235,7 +238,7 @@ public class WalletGui implements IGuiHolder<GuiData> {
         return Flow.column()
             .width(RIGHT_WIDTH)
             .fullHeight()
-            .childPadding(GAP)
+            .childPadding(1)
             .child(
                 Widgets.text(IKey.lang("gui.nhkantan.wallet.exchange_list"))
                     .fullWidth())
@@ -259,9 +262,7 @@ public class WalletGui implements IGuiHolder<GuiData> {
                     .padding(2, 0)
                     .childPadding(ROW_PADDING)
                     .child(
-                        Widgets.itemIcon(
-                            item.item()
-                                .createStack(1))
+                        Widgets.itemIcon(item.displayStack())
                             .size(ITEM_SIZE))
                     .child(new TextWidget<>(rates(item)).height(ITEM_SIZE)));
     }
@@ -335,9 +336,7 @@ public class WalletGui implements IGuiHolder<GuiData> {
         @Nullable
         private ItemStack selectedStack() {
             CurrencyItem item = selected();
-            return item == null ? null
-                : item.item()
-                    .createStack(1);
+            return item == null ? null : item.displayStack();
         }
 
         /** Client: total cost of the selected item and quantity. */

@@ -10,6 +10,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.storage.MapStorage;
 
 import com.yuelengm.nhkantan.config.CurrencyConfig;
+import com.yuelengm.nhkantan.util.Denominations;
 import com.yuelengm.nhkantan.util.MathUtils;
 import com.yuelengm.nhkantan.util.PlayerInventories;
 import com.yuelengm.nhkantan.wallet.WalletResult.Status;
@@ -70,10 +71,10 @@ public class WalletService {
             if (stack == null) continue;
             if (balance < 0) {
                 DebtItem item = ExchangeItems.findDebt(stack);
-                if (item != null) total = MathUtils.saturatedAdd(total, item.repayment(stack.stackSize));
+                if (item != null) total = MathUtils.saturatedAdd(total, item.repayment(units(item.items(), stack)));
             } else {
                 CurrencyItem item = ExchangeItems.findDeposit(stack);
-                if (item != null) total = MathUtils.saturatedAdd(total, item.depositCredit(stack.stackSize));
+                if (item != null) total = MathUtils.saturatedAdd(total, item.depositCredit(units(item.items(), stack)));
             }
         }
         return balance < 0 ? Math.min(total, -balance) : total;
@@ -96,43 +97,54 @@ public class WalletService {
 
     /**
      * Hands in a stack: deposits it, or repays debt with it while in debt. The stack size is reduced by the items
-     * used; repaying never uses more items than needed.
+     * used; repaying never uses more items than needed, the last one may be worth more than the remaining debt.
      *
      * @return items consumed from the stack
      */
     public int settleStack(EntityPlayer player, ItemStack stack) {
         UUID id = player.getUniqueID();
         WalletResult result;
+        int unitsPerItem;
         if (balance(id) < 0) {
             DebtItem item = ExchangeItems.findDebt(stack);
             if (item == null) return 0;
-            result = repay(id, item, stack.stackSize);
+            unitsPerItem = item.items()
+                .unitsPer(stack);
+            result = repay(id, item, units(item.items(), stack));
         } else {
             CurrencyItem item = ExchangeItems.findDeposit(stack);
             if (item == null) return 0;
-            result = deposit(id, item, stack.stackSize);
+            unitsPerItem = item.items()
+                .unitsPer(stack);
+            result = deposit(id, item, units(item.items(), stack));
         }
         if (!result.status()
             .isSuccess()) return 0;
-        stack.stackSize -= result.itemCount();
-        return result.itemCount();
+        int used = (int) Math.min(stack.stackSize, MathUtils.ceilDiv(result.units(), unitsPerItem));
+        stack.stackSize -= used;
+        return used;
     }
 
     /**
-     * Withdraws up to {@code requested} items into the player's inventory, limited to the free space; only the items
-     * actually handed out are charged.
+     * Withdraws up to {@code requested} base units into the player's inventory, paid out in the largest denominations
+     * and limited to what fits; only the units actually handed out are charged.
      */
     public WalletResult withdrawToInventory(EntityPlayer player, CurrencyItem item, int requested) {
         UUID id = player.getUniqueID();
-        int count = Math.min(requested, PlayerInventories.freeSpace(player.inventory, item.item()));
+        int count = PlayerInventories.largestFitting(player.inventory, item.items(), requested);
         if (count <= 0) return WalletResult.failure(Status.INVENTORY_FULL, balance(id));
         WalletResult result = withdraw(id, item, count);
         if (result.status()
-            .isSuccess()) PlayerInventories.give(player, item.item(), count);
+            .isSuccess()) {
+            PlayerInventories.give(
+                player,
+                item.items()
+                    .split(count));
+        }
         return result;
     }
 
-    /** Credits {@code count} deposited items. The caller removes exactly that many items on success. */
+    /** Credits {@code count} deposited base units. The caller removes the corresponding items on success. */
     public WalletResult deposit(UUID player, CurrencyItem item, int count) {
         long balance = balance(player);
         if (balance < 0) return WalletResult.failure(Status.IN_DEBT, balance);
@@ -145,13 +157,13 @@ public class WalletService {
     }
 
     /**
-     * Repays debt with up to {@code offered} items, never using more than needed to reach zero. The caller removes
-     * {@link WalletResult#itemCount()} items on success.
+     * Repays debt with up to {@code offered} base units, never using more than needed to reach zero. The caller
+     * removes the items for {@link WalletResult#units()} units on success.
      */
     public WalletResult repay(UUID player, DebtItem item, int offered) {
         long balance = balance(player);
         if (balance >= 0) return WalletResult.failure(Status.NOT_IN_DEBT, balance);
-        int count = Math.min(offered, item.itemsToClear(-balance));
+        int count = Math.min(offered, item.unitsToClear(-balance));
         if (count <= 0) return WalletResult.failure(Status.NO_ITEMS, balance);
         long updated = Math.min(0L, MathUtils.saturatedAdd(balance, item.repayment(count)));
         data.set(player, updated);
@@ -159,7 +171,7 @@ public class WalletService {
     }
 
     /**
-     * Charges the withdrawal of {@code count} items, or nothing if the balance does not cover it. The caller hands
+     * Charges the withdrawal of {@code count} base units, or nothing if the balance does not cover it. The caller hands
      * out the items on success; prefer {@link #withdrawToInventory}.
      */
     public WalletResult withdraw(UUID player, CurrencyItem item, int count) {
@@ -172,5 +184,10 @@ public class WalletService {
         long updated = balance - cost;
         data.set(player, updated);
         return new WalletResult(Status.WITHDRAWN, count, cost, updated);
+    }
+
+    /** Base units of a whole stack, capped at {@link Integer#MAX_VALUE}. */
+    private static int units(Denominations family, ItemStack stack) {
+        return (int) Math.min(Integer.MAX_VALUE, family.unitsOf(stack));
     }
 }

@@ -15,6 +15,11 @@ public class MathUtils {
         return sum;
     }
 
+    /** {@code ceil(a / b)} for non-negative {@code a} and positive {@code b}. */
+    public static long ceilDiv(long a, long b) {
+        return (a + b - 1) / b;
+    }
+
     public static int clamp(int value, int min, int max) {
         return Math.max(min, Math.min(max, value));
     }

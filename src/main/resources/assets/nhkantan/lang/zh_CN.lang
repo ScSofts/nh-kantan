@@ -62,3 +62,17 @@ nhkantan.exchange.currencyitems=兑换货币
 nhkantan.exchange.currencyitems.tooltip=可与市场币双向兑换的物品，每条一项：\n模组ID:物品名;元数据;存入价值;存入手续费;取出价值;取出手续费\n价值为每个物品对应的市场币，填负数表示禁用该方向（仅存入或仅取出）。手续费为兑换金额的比例（0.1 = 10%%）：\n存入到账 价值 × (1 - 手续费)，取出花费 价值 × (1 + 手续费)。
 nhkantan.exchange.debtitems=还债物品
 nhkantan.exchange.debtitems.tooltip=可用于偿还负余额的物品，每条一项：模组ID:物品名;元数据;价值\n价值：每个物品偿还的市场币数。还债最多使余额回到 0。
+nhkantan.compat=模组联动
+nhkantan.compat.tooltip=与其他模组的联动设置。
+nhkantan.compat.gtnhcoins=GTNH币
+nhkantan.compat.gtnhcoins.tooltip=将GTNH任务币加入兑换列表和还债列表。\n每种币只显示一项，所有面额（1、10、100、1000、10000）都可存入。\n取出时自动按最大面额发放。
+nhkantan.compat.gtnhcoindepositvalue=币存入价值
+nhkantan.compat.gtnhcoindepositvalue.tooltip=每个基础币存入的市场币数。填负数禁用存入。
+nhkantan.compat.gtnhcoindepositfee=币存入手续费
+nhkantan.compat.gtnhcoindepositfee.tooltip=兑换金额的比例（0.1 = 10%%）。
+nhkantan.compat.gtnhcoinwithdrawvalue=币取出价值
+nhkantan.compat.gtnhcoinwithdrawvalue.tooltip=每个基础币取出花费的市场币数。填负数禁用取出。
+nhkantan.compat.gtnhcoinwithdrawfee=币取出手续费
+nhkantan.compat.gtnhcoinwithdrawfee.tooltip=兑换金额的比例（0.1 = 10%%）。
+nhkantan.compat.gtnhcoindebtvalue=币还债价值
+nhkantan.compat.gtnhcoindebtvalue.tooltip=每个基础币偿还的债务。0 或负数表示不能用币还债。

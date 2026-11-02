@@ -1,63 +1,65 @@
 package com.yuelengm.nhkantan.wallet;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.function.Function;
 
 import javax.annotation.Nullable;
 
 import net.minecraft.item.ItemStack;
 
-import com.yuelengm.nhkantan.config.ExchangeConfig;
-import com.yuelengm.nhkantan.util.ConfigEntries;
-
 /**
- * Parsed view of the exchange config. Entries are parsed lazily, after all items are registered, and re-parsed when
- * the config array is replaced (e.g. by server-to-client config sync). Invalid entries are logged and skipped.
+ * Merged view of all {@link ExchangeProvider}s in registration order. The merged lists are rebuilt only when a
+ * provider hands out a different list instance, i.e. when its configuration changed.
  */
 public class ExchangeItems {
 
-    private static final String CONTEXT = "exchange config";
+    private static final List<ExchangeProvider> PROVIDERS = new ArrayList<>();
 
-    private static String[] currencySource;
+    private static List<List<CurrencyItem>> currencySources = Collections.emptyList();
     private static List<CurrencyItem> currencyItems = Collections.emptyList();
-    private static String[] debtSource;
+    private static List<List<DebtItem>> debtSources = Collections.emptyList();
     private static List<DebtItem> debtItems = Collections.emptyList();
+
+    static {
+        register(new ConfigExchangeProvider());
+    }
 
     private ExchangeItems() {}
 
-    /**
-     * Entries of {@code currencyItems}: {@code modid:itemName;meta;depositValue;depositFee;withdrawValue;withdrawFee}
-     */
+    /** Adds a provider; its items are listed after those of earlier providers. */
+    public static synchronized void register(ExchangeProvider provider) {
+        PROVIDERS.add(provider);
+    }
+
     public static synchronized List<CurrencyItem> currencyItems() {
-        String[] source = ExchangeConfig.currencyItems;
-        if (source != currencySource) {
-            currencySource = source;
-            currencyItems = ConfigEntries.parseEntries(source, 6, ExchangeItems::parseCurrency, CONTEXT);
+        if (changed(currencySources, ExchangeProvider::currencyItems)) {
+            currencySources = collect(ExchangeProvider::currencyItems);
+            currencyItems = merge(currencySources);
         }
         return currencyItems;
     }
 
-    /** Entries of {@code debtItems}: {@code modid:itemName;meta;value} */
     public static synchronized List<DebtItem> debtItems() {
-        String[] source = ExchangeConfig.debtItems;
-        if (source != debtSource) {
-            debtSource = source;
-            debtItems = ConfigEntries.parseEntries(source, 3, ExchangeItems::parseDebt, CONTEXT);
+        if (changed(debtSources, ExchangeProvider::debtItems)) {
+            debtSources = collect(ExchangeProvider::debtItems);
+            debtItems = merge(debtSources);
         }
         return debtItems;
     }
 
-    /** The currency item matching the stack, in either direction. */
+    /** The currency item whose family contains the stack, in either direction. */
     @Nullable
     public static CurrencyItem findCurrency(ItemStack stack) {
         for (CurrencyItem item : currencyItems()) {
-            if (item.item()
-                .matches(stack)) return item;
+            if (item.items()
+                .unitsPer(stack) > 0) return item;
         }
         return null;
     }
 
-    /** The currency item matching the stack if it can be deposited. */
+    /** The currency item whose family contains the stack, if it can be deposited. */
     @Nullable
     public static CurrencyItem findDeposit(ItemStack stack) {
         CurrencyItem item = findCurrency(stack);
@@ -67,8 +69,8 @@ public class ExchangeItems {
     @Nullable
     public static DebtItem findDebt(ItemStack stack) {
         for (DebtItem item : debtItems()) {
-            if (item.item()
-                .matches(stack)) return item;
+            if (item.items()
+                .unitsPer(stack) > 0) return item;
         }
         return null;
     }
@@ -82,32 +84,24 @@ public class ExchangeItems {
         return item.canWithdraw() ? item : null;
     }
 
-    private static CurrencyItem parseCurrency(String[] fields) {
-        double depositValue = parseValue(fields[2], "depositValue");
-        double depositFee = ConfigEntries.parseFraction(fields[3], "depositFee", 1.0D);
-        double withdrawValue = parseValue(fields[4], "withdrawValue");
-        double withdrawFee = ConfigEntries.parseFraction(fields[5], "withdrawFee", Double.MAX_VALUE);
-        if (depositValue < 0.0D && withdrawValue < 0.0D) {
-            throw new IllegalArgumentException("depositValue and withdrawValue are both disabled");
+    private static <T> List<List<T>> collect(Function<ExchangeProvider, List<T>> getter) {
+        List<List<T>> sources = new ArrayList<>(PROVIDERS.size());
+        for (ExchangeProvider provider : PROVIDERS) sources.add(getter.apply(provider));
+        return sources;
+    }
+
+    /** Whether any provider now returns a different list instance than the cached one; allocation free. */
+    private static <T> boolean changed(List<List<T>> cached, Function<ExchangeProvider, List<T>> getter) {
+        if (cached.size() != PROVIDERS.size()) return true;
+        for (int i = 0; i < cached.size(); i++) {
+            if (cached.get(i) != getter.apply(PROVIDERS.get(i))) return true;
         }
-        return new CurrencyItem(
-            ConfigEntries.parseItem(fields[0], fields[1]),
-            depositValue,
-            depositFee,
-            withdrawValue,
-            withdrawFee);
+        return false;
     }
 
-    private static DebtItem parseDebt(String[] fields) {
-        return new DebtItem(
-            ConfigEntries.parseItem(fields[0], fields[1]),
-            ConfigEntries.parsePositive(fields[2], "value"));
-    }
-
-    /** A positive value, or a negative one meaning the direction is disabled; zero is rejected. */
-    private static double parseValue(String text, String name) {
-        double value = ConfigEntries.parseDouble(text, name);
-        if (value == 0.0D) throw new IllegalArgumentException(name + " must not be 0; use a negative value to disable");
-        return value;
+    private static <T> List<T> merge(List<List<T>> sources) {
+        List<T> merged = new ArrayList<>();
+        for (List<T> source : sources) merged.addAll(source);
+        return Collections.unmodifiableList(merged);
     }
 }

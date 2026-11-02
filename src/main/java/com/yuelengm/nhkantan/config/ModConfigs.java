@@ -16,6 +16,7 @@ public class ModConfigs {
             ConfigurationManager.registerConfig(TradingConfig.class);
             ConfigurationManager.registerConfig(CurrencyConfig.class);
             ConfigurationManager.registerConfig(ExchangeConfig.class);
+            ConfigurationManager.registerConfig(CompatConfig.class);
         } catch (ConfigException e) {
             throw new IllegalStateException("Failed to register NH kantan config", e);
         }

@@ -24,18 +24,18 @@ public class WalletResult {
     }
 
     private final Status status;
-    private final int itemCount;
+    private final int units;
     private final long amount;
     private final long balance;
 
     /**
-     * @param itemCount items moved
-     * @param amount    currency credited, charged or repaid
-     * @param balance   balance after the operation
+     * @param units   base units moved
+     * @param amount  currency credited, charged or repaid
+     * @param balance balance after the operation
      */
-    public WalletResult(Status status, int itemCount, long amount, long balance) {
+    public WalletResult(Status status, int units, long amount, long balance) {
         this.status = status;
-        this.itemCount = itemCount;
+        this.units = units;
         this.amount = amount;
         this.balance = balance;
     }
@@ -48,8 +48,8 @@ public class WalletResult {
         return status;
     }
 
-    public int itemCount() {
-        return itemCount;
+    public int units() {
+        return units;
     }
 
     public long amount() {
