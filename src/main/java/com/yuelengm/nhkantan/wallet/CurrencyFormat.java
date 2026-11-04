@@ -26,6 +26,17 @@ public class CurrencyFormat {
         return format(AMOUNT.get(), cents);
     }
 
+    /** An amount with an explicit {@code +} for positive values, e.g. {@code +1.5 NHC} or {@code -2 NHC}. */
+    public static String signedAmount(long cents) {
+        return (cents > 0 ? "+" : "") + amount(cents);
+    }
+
+    /** Dark green for gains, red for losses, gray for zero. */
+    public static EnumChatFormatting signColor(long cents) {
+        return cents > 0 ? EnumChatFormatting.DARK_GREEN
+            : cents < 0 ? EnumChatFormatting.RED : EnumChatFormatting.DARK_GRAY;
+    }
+
     /** A balance always with two decimals, e.g. {@code 1,234.50 NHC}; red with a debt marker when negative. */
     public static String balance(long cents) {
         String text = format(BALANCE.get(), cents);

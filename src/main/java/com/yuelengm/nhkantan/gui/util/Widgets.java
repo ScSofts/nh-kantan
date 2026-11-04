@@ -42,6 +42,15 @@ public class Widgets {
         return text(key).width(width);
     }
 
+    /** One full-width line: label on the left, value on the right. */
+    public static Flow labeledValue(IKey label, IKey value) {
+        return Flow.row()
+            .fullWidth()
+            .height(LINE_HEIGHT)
+            .child(text(label).expanded())
+            .child(text(value, Alignment.CenterRight));
+    }
+
     /** A framed column with slot-like background, sized to its children. */
     public static Flow section(String name, int width) {
         return Flow.column()

@@ -61,9 +61,9 @@ import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
 
 /**
- * Handheld market terminal. Right-clicking opens the market GUI: a stock list and the K-line chart of the selected
- * stock, both fed by the shared client market data. The selected stock also drives the order form on the right and the
- * position list below the chart; trading requests are validated and executed by {@link TradingService} on the server.
+ * Handheld market terminal. Right-clicking opens the market GUI: the K-line chart of the selected stock with the
+ * position list below it, and on the right the order form with the scrollable stock list below it, all fed by the
+ * shared client market data; trading requests are validated and executed by {@link TradingService} on the server.
  */
 public class ItemMarketTerminal extends Item implements IGuiHolder<PlayerInventoryGuiData> {
 
@@ -74,10 +74,10 @@ public class ItemMarketTerminal extends Item implements IGuiHolder<PlayerInvento
     private static final int TITLE_HEIGHT = 14;
     private static final int CLOSE_BUTTON_SPACE = 12;
     private static final int HEADER_BUTTON_WIDTH = 40;
-    private static final int LIST_WIDTH = 92;
-    private static final int FORM_WIDTH = 170;
-    private static final int BUTTON_HEIGHT = 22;
+    private static final int FORM_WIDTH = 120;
+    private static final int BUTTON_HEIGHT = 20;
     private static final int SMALL_BUTTON_HEIGHT = 14;
+    private static final int CHART_HEIGHT = 136;
     private static final int STEP_BUTTON_WIDTH = 14;
     private static final int MAX_MARGIN = 999_999_999;
     private static final int SHIFT_STEP = 10;
@@ -114,19 +114,16 @@ public class ItemMarketTerminal extends Item implements IGuiHolder<PlayerInvento
         InteractionSyncHandler openWallet = GuiActions.serverClick(() -> openWallet(player));
         TradingState state = new TradingState(player, syncManager);
 
-        ModularPanel panel = ModularPanel.defaultPanel("nhkantan_market_terminal", PANEL_WIDTH, PANEL_HEIGHT);
+        ModularPanel panel = ModularPanel.defaultPanel("nhkantan_market_terminal")
+            .sizeRel(0.95f, 0.85f);
         Flow column = Flow.column()
-            .widthRel(1f)
-            .heightRel(1f)
+            .full()
             .padding(PADDING)
             .childPadding(GAP)
-            .child(header(balance, openWallet, state));
-        // Market data only exists on the client; the server-side copy of the panel carries no market widgets
-        if (data.getPlayer().worldObj.isRemote) {
-            column.child(marketView(state));
-        }
-        return panel.child(column)
-            .child(ButtonWidget.panelCloseButton());
+            .child(header(balance, openWallet, state))
+            .child(marketView(state).expanded());
+
+        return panel.child(column);
     }
 
     /** Server: switches from the terminal to the wallet window. */
@@ -142,54 +139,57 @@ public class ItemMarketTerminal extends Item implements IGuiHolder<PlayerInvento
 
     /** Title on the left; balance and the wallet button on the right, clear of the close button. */
     private static Flow header(LongSyncValue balance, InteractionSyncHandler openWallet, TradingState state) {
-        int width = PANEL_WIDTH - PADDING * 2 - CLOSE_BUTTON_SPACE;
-        int textWidth = (width - FORM_WIDTH - HEADER_BUTTON_WIDTH - GAP * 3) / 2;
         return Flow.row()
-            .width(width)
+            .fullWidth()
             .height(TITLE_HEIGHT)
             .childPadding(GAP)
             .child(
                 Widgets.text(IKey.lang("gui.nhkantan.market_terminal.title"), Alignment.CenterLeft)
-                    .size(textWidth, TITLE_HEIGHT))
+                    .expanded())
             .child(
-                Widgets.text(IKey.dynamic(() -> CurrencyFormat.balance(balance.getLongValue())), Alignment.CenterRight)
-                    .size(textWidth, TITLE_HEIGHT))
-            .child(
-                Widgets.text(IKey.dynamic(state::positionSummary), Alignment.CenterRight)
-                    .size(FORM_WIDTH, TITLE_HEIGHT))
+                Widgets.text(IKey.dynamic(() -> CurrencyFormat.balance(balance.getLongValue())), Alignment.CenterRight))
             .child(
                 new ButtonWidget<>().size(HEADER_BUTTON_WIDTH, TITLE_HEIGHT)
                     .overlay(IKey.lang("gui.nhkantan.wallet.button"))
                     .syncHandler(openWallet));
     }
 
-    /** Stock list on the left, chart plus positions in the middle, order form on the right. */
+    /**
+     * Chart and positions on the left, sharing one scroll view; order form and the scrollable stock list below it on
+     * the right.
+     */
     private static Flow marketView(TradingState state) {
-        int contentWidth = PANEL_WIDTH - PADDING * 2;
-        int contentHeight = PANEL_HEIGHT - PADDING * 2 - TITLE_HEIGHT - GAP;
-        int middleWidth = contentWidth - LIST_WIDTH - FORM_WIDTH - GAP * 2;
-        ListWidget<IWidget, ?> list = new ListWidget<>().width(LIST_WIDTH)
+        ListWidget<IWidget, ?> left = new ListWidget<>().expanded()
             .heightRel(1f)
+            .childSeparator(IIcon.EMPTY_2PX)
+            .child(
+                NHKantan.proxy.createStockChart(state::selectedView)
+                    .widthRel(1f)
+                    .height(CHART_HEIGHT))
+            .child(positionBox(state));
+        return Flow.row()
+            .full()
+            .childPadding(GAP)
+            .child(left)
+            .child(
+                Flow.column()
+                    .name("right")
+                    .width(FORM_WIDTH)
+                    .heightRel(1f)
+                    .childPadding(GAP)
+                    .child(orderForm(state))
+                    .child(stockList(state).expanded()));
+    }
+
+    /** Every stock as a selectable row; scrolls when there are more than fit. */
+    private static ListWidget<IWidget, ?> stockList(TradingState state) {
+        ListWidget<IWidget, ?> list = new ListWidget<>().full()
+            .expanded()
             .childSeparator(IIcon.EMPTY_2PX);
         for (StockView stock : ClientMarketData.INSTANCE.stocks()) {
             list.child(stockButton(stock.id(), stock.name(), state));
         }
-        return Flow.row()
-            .width(contentWidth)
-            .height(contentHeight)
-            .childPadding(GAP)
-            .child(list)
-            .child(
-                Flow.column()
-                    .width(middleWidth)
-                    .heightRel(1f)
-                    .childPadding(GAP)
-                    .child(
-                        NHKantan.proxy.createStockChart(state::selectedView)
-                            .width(middleWidth)
-                            .height(140))
-                    .child(positionBox(state)))
-            .child(orderForm(state));
+        return list;
     }
 
     /** Selectable entry showing the stock name and its live price and change. */
@@ -203,19 +203,18 @@ public class ItemMarketTerminal extends Item implements IGuiHolder<PlayerInvento
             .overlay(IKey.dynamic(() -> name + "\n" + formatPrice(ClientMarketData.INSTANCE.get(stockId))));
     }
 
-    /** Open positions below the chart: a scrollable list rebuilt from the synced rows. */
+    /** Open positions below the chart; grows with its rows, the surrounding scroll view scrolls. */
     private static Flow positionBox(TradingState state) {
-        ListWidget<IWidget, ?> rows = new ListWidget<>().widthRel(1f)
-            .height(46);
-        state.trackPositions(rows);
-        return Flow.column()
+        Flow rows = Flow.column()
             .widthRel(1f)
-            .height(46)
-            .child(rows);
+            .coverChildrenHeight()
+            .childPadding(2);
+        state.trackPositions(rows);
+        return rows;
     }
 
-    /** Rebuilds the scrollable position rows from the latest synced list. */
-    private static void rebuildPositions(TradingState state, ListWidget<IWidget, ?> rows) {
+    /** Rebuilds the position rows from the latest synced list and re-lays out the scroll view around them. */
+    private static void rebuildPositions(TradingState state, Flow rows) {
         rows.removeAll();
         List<Position> owned = state.positions();
         if (owned.isEmpty()) {
@@ -224,6 +223,7 @@ public class ItemMarketTerminal extends Item implements IGuiHolder<PlayerInvento
         for (Position position : owned) {
             rows.child(positionRow(state, position));
         }
+        if (rows.isValid()) rows.scheduleResize();
     }
 
     private static Flow positionRow(TradingState state, Position position) {
@@ -235,10 +235,17 @@ public class ItemMarketTerminal extends Item implements IGuiHolder<PlayerInvento
             .height(SMALL_BUTTON_HEIGHT)
             .childPadding(2)
             .child(
-                Widgets.text(
-                    IKey.dynamic(
-                        () -> "#" + position
-                            .id() + " " + direction + " " + position.leverage() + "x " + state.profitText(position)))
+                Widgets
+                    .text(
+                        IKey.dynamic(
+                            () -> state.stockName(position.stockId()) + " "
+                                + direction
+                                + " "
+                                + position.leverage()
+                                + "x "
+                                + "    "
+                                + state.profitText(position)))
+                    .fullWidth()
                     .expanded())
             .child(
                 new ButtonWidget<>().size(36, SMALL_BUTTON_HEIGHT)
@@ -248,42 +255,46 @@ public class ItemMarketTerminal extends Item implements IGuiHolder<PlayerInvento
 
     /** Order form for the selected stock: side, margin, leverage slider, previews and two open buttons. */
     private static Flow orderForm(TradingState state) {
-        IKey stepHint = IKey.lang("gui.nhkantan.wallet.step_hint", SHIFT_STEP);
         return Widgets.section("tradingForm", FORM_WIDTH)
             .childPadding(2)
-            .child(Widgets.text(IKey.dynamic(state::selectedName)))
             .child(
                 Flow.row()
                     .fullWidth()
                     .height(18)
                     .childPadding(2)
-                    .child(Widgets.text(IKey.lang("gui.nhkantan.trading.margin"), 44))
-                    .child(
-                        Widgets.stepButton("-", state.marginValue, -1, -SHIFT_STEP, 1, MAX_MARGIN, stepHint)
-                            .size(STEP_BUTTON_WIDTH, SMALL_BUTTON_HEIGHT))
+                    .child(Widgets.text(IKey.lang("gui.nhkantan.trading.margin")))
                     .child(
                         new TextFieldWidget().expanded()
                             .numbersLong(1, MAX_MARGIN)
                             .value(state.marginValue)
-                            .autoUpdateOnChange(true))
-                    .child(
-                        Widgets.stepButton("+", state.marginValue, 1, SHIFT_STEP, 1, MAX_MARGIN, stepHint)
-                            .size(STEP_BUTTON_WIDTH, SMALL_BUTTON_HEIGHT)))
+                            .autoUpdateOnChange(true)))
             .child(Widgets.text(IKey.dynamic(state::leverageLine)))
             .child(state.leverageSlider())
-            .child(Widgets.text(IKey.dynamic(state::costPreview)))
-            .child(Widgets.text(IKey.dynamic(state::riskPreview)))
+            .child(
+                Widgets.labeledValue(
+                    IKey.lang("gui.nhkantan.trading.notional"),
+                    IKey.dynamic(() -> CurrencyFormat.amount(state.notional()))))
+            .child(
+                Widgets.labeledValue(
+                    IKey.lang("gui.nhkantan.trading.fee"),
+                    IKey.dynamic(() -> CurrencyFormat.amount(state.fee()))))
+            .child(
+                Widgets.labeledValue(
+                    IKey.lang("gui.nhkantan.trading.liquidation_move"),
+                    IKey.dynamic(state::liquidationMove)))
             .child(
                 Flow.row()
                     .fullWidth()
                     .height(BUTTON_HEIGHT)
                     .childPadding(GAP)
                     .child(
-                        new ButtonWidget<>().size(78, BUTTON_HEIGHT)
+                        new ButtonWidget<>().height(BUTTON_HEIGHT)
+                            .expanded()
                             .overlay(IKey.lang("gui.nhkantan.trading.open_long"))
                             .onMousePressed(GuiActions.leftClick(() -> state.requestOpen(Direction.LONG))))
                     .child(
-                        new ButtonWidget<>().size(78, BUTTON_HEIGHT)
+                        new ButtonWidget<>().height(BUTTON_HEIGHT)
+                            .expanded()
                             .overlay(IKey.lang("gui.nhkantan.trading.open_short"))
                             .onMousePressed(GuiActions.leftClick(() -> state.requestOpen(Direction.SHORT)))));
     }
@@ -336,7 +347,7 @@ public class ItemMarketTerminal extends Item implements IGuiHolder<PlayerInvento
         }
 
         /** Client: rebuilds the position rows whenever the synced list changes. */
-        private void trackPositions(ListWidget<IWidget, ?> rows) {
+        private void trackPositions(Flow rows) {
             rebuildPositions(this, rows);
             syncManager.onClientTick(() -> {
                 String encoded = positionLines.getStringValue();
@@ -390,10 +401,18 @@ public class ItemMarketTerminal extends Item implements IGuiHolder<PlayerInvento
                 CurrencyFormat.amount(profit));
         }
 
-        /** Client: live profit of the position at the latest synced price. */
+        /** Client: display name of the stock, or its id when the stock is not shown (e.g. disabled). */
+        private String stockName(String stockId) {
+            StockView view = ClientMarketData.INSTANCE.get(stockId);
+            return view == null ? stockId : view.name();
+        }
+
+        /** Client: live profit of the position at the latest synced price, colored by sign. */
         private String profitText(Position position) {
             StockView view = ClientMarketData.INSTANCE.get(position.stockId());
-            return view == null ? "-" : CurrencyFormat.amount(position.unrealizedCents(view.price()));
+            if (view == null) return "-";
+            long profit = position.unrealizedCents(view.price());
+            return CurrencyFormat.signColor(profit) + CurrencyFormat.signedAmount(profit) + EnumChatFormatting.RESET;
         }
 
         /** Client: live profit of the position, or zero when the stock is not shown. */
@@ -419,24 +438,30 @@ public class ItemMarketTerminal extends Item implements IGuiHolder<PlayerInvento
             return StatCollector.translateToLocalFormatted("gui.nhkantan.trading.leverage_value", leverage);
         }
 
-        /** Client: notional, fee and total of the current form. */
-        private String costPreview() {
-            long marginCents = Money.cents(margin);
-            long notional = TradingMath.notional(marginCents, leverage);
-            long fee = TradingMath.openFee(notional, rules().openFeePercent());
-            return StatCollector.translateToLocalFormatted(
-                "gui.nhkantan.trading.cost",
-                CurrencyFormat.amount(notional),
-                CurrencyFormat.amount(fee),
-                CurrencyFormat.amount(MathUtils.saturatedAdd(marginCents, fee)));
+        private long marginCents() {
+            return Money.cents(margin);
+        }
+
+        /** Client: notional position of the current form. */
+        private long notional() {
+            return TradingMath.notional(marginCents(), leverage);
+        }
+
+        /** Client: opening fee of the current form. */
+        private long fee() {
+            return TradingMath.openFee(notional(), rules().openFeePercent());
+        }
+
+        /** Client: margin plus fee, deducted from the wallet when opening. */
+        private long total() {
+            return MathUtils.saturatedAdd(marginCents(), fee());
         }
 
         /** Client: adverse price move that would liquidate the drafted position. */
-        private String riskPreview() {
+        private String liquidationMove() {
             double liquidation = rules().liquidationPercent();
-            if (liquidation <= 0.0D) return StatCollector.translateToLocal("gui.nhkantan.trading.no_liquidation");
-            String move = String.format("%.2f%%", liquidation / leverage);
-            return StatCollector.translateToLocalFormatted("gui.nhkantan.trading.risk", move);
+            if (liquidation <= 0.0D) return StatCollector.translateToLocal("gui.nhkantan.trading.liquidation_off");
+            return String.format("%.2f%%", liquidation / leverage);
         }
 
         /** Client: asks the server to open the drafted position on the selected stock. */
