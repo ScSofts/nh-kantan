@@ -20,6 +20,16 @@ public class MathUtils {
         return (a + b - 1) / b;
     }
 
+    /** {@code a * b}, saturating at {@link Long#MIN_VALUE} / {@link Long#MAX_VALUE} instead of overflowing. */
+    public static long saturatedMultiply(long a, long b) {
+        if (a == 0L || b == 0L) return 0L;
+        if (a == Long.MIN_VALUE && b == -1L) return Long.MAX_VALUE;
+        if (b == Long.MIN_VALUE && a == -1L) return Long.MAX_VALUE;
+        long result = a * b;
+        if (result / b != a) return (a ^ b) < 0 ? Long.MIN_VALUE : Long.MAX_VALUE;
+        return result;
+    }
+
     public static int clamp(int value, int min, int max) {
         return Math.max(min, Math.min(max, value));
     }

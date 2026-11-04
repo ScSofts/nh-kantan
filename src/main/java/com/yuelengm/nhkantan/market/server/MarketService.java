@@ -1,7 +1,9 @@
 package com.yuelengm.nhkantan.market.server;
 
 import java.nio.file.Path;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 
 import javax.annotation.Nullable;
@@ -20,6 +22,7 @@ import com.yuelengm.nhkantan.market.engine.StockMarket;
 import com.yuelengm.nhkantan.network.MarketSnapshotMessage;
 import com.yuelengm.nhkantan.network.MarketUpdateMessage;
 import com.yuelengm.nhkantan.network.ModNetwork;
+import com.yuelengm.nhkantan.trading.TradingService;
 
 /**
  * Server-side owner of the running market for the lifetime of a server: loads definitions and price history, advances
@@ -35,10 +38,12 @@ public class MarketService {
     @Nullable
     private static MarketService instance;
 
+    private final MarketDefinitions definitions;
     private final StockMarket market;
     private int ticksSinceUpdate;
 
-    private MarketService(StockMarket market) {
+    private MarketService(MarketDefinitions definitions, StockMarket market) {
+        this.definitions = definitions;
         this.market = market;
     }
 
@@ -55,11 +60,21 @@ public class MarketService {
             new FilePriceStore(priceDirectory(server)),
             recentPrices(),
             new Random());
-        instance = new MarketService(market);
+        instance = new MarketService(definitions, market);
     }
 
     public static void stop() {
         instance = null;
+    }
+
+    /** The validated market definitions; formulas and modes never leave the server. */
+    public MarketDefinitions definitions() {
+        return definitions;
+    }
+
+    /** The running price engine. */
+    public StockMarket market() {
+        return market;
     }
 
     private static MarketDefinitions loadDefinitions() {
@@ -98,6 +113,12 @@ public class MarketService {
         ticksSinceUpdate = 0;
         List<PriceUpdate> updates = market.update();
         if (updates.isEmpty()) return;
+        TradingService trading = TradingService.get();
+        if (trading != null) {
+            Map<String, Float> prices = new HashMap<>();
+            for (PriceUpdate update : updates) prices.put(update.stockId(), update.price());
+            trading.liquidate(prices);
+        }
         ModNetwork.CHANNEL.sendToAll(new MarketUpdateMessage(updates));
     }
 

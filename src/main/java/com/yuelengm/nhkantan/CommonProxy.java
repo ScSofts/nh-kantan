@@ -13,6 +13,7 @@ import com.yuelengm.nhkantan.market.server.MarketEventHandler;
 import com.yuelengm.nhkantan.market.server.MarketService;
 import com.yuelengm.nhkantan.market.view.StockView;
 import com.yuelengm.nhkantan.network.ModNetwork;
+import com.yuelengm.nhkantan.trading.TradingService;
 import com.yuelengm.nhkantan.wallet.WalletService;
 
 import cpw.mods.fml.common.FMLCommonHandler;
@@ -46,11 +47,13 @@ public class CommonProxy {
         // Market definitions are read here, on the server only; clients only ever receive public snapshots
         MarketService.start(event.getServer());
         WalletService.start(event.getServer());
+        TradingService.start(event.getServer());
     }
 
     public void serverStopped(FMLServerStoppedEvent event) {
         MarketService.stop();
         WalletService.stop();
+        TradingService.stop();
     }
 
     /**
