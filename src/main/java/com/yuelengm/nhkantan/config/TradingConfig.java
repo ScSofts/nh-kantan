@@ -14,12 +14,12 @@ import com.yuelengm.nhkantan.NHKantan;
 public class TradingConfig {
 
     @Config.Comment("Maximum open positions per player across all stocks.")
-    @Config.DefaultInt(1)
+    @Config.DefaultInt(1000)
     @Config.RangeInt(min = 1, max = 1000)
     public static int maxOpenPositionsPerPlayer;
 
     @Config.Comment("Maximum open positions per player on a single stock.")
-    @Config.DefaultInt(1)
+    @Config.DefaultInt(1000)
     @Config.RangeInt(min = 1, max = 1000)
     public static int maxOpenPositionsPerStock;
 

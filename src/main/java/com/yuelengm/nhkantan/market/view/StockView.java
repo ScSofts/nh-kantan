@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
+import com.yuelengm.nhkantan.market.LeverageRange;
 import com.yuelengm.nhkantan.market.PriceWindow;
 import com.yuelengm.nhkantan.market.StockSnapshot;
 
@@ -17,6 +18,7 @@ public class StockView {
     private final String name;
     private final double lowerBound;
     private final double upperBound;
+    private final LeverageRange leverage;
     private final PriceWindow prices;
     private List<Candle> candles = Collections.emptyList();
 
@@ -28,6 +30,7 @@ public class StockView {
         this.name = snapshot.name();
         this.lowerBound = snapshot.lowerBound();
         this.upperBound = snapshot.upperBound();
+        this.leverage = snapshot.leverage();
         this.prices = new PriceWindow(recentPrices);
         this.prices.addAll(snapshot.prices());
         rebuildCandles();
@@ -47,6 +50,11 @@ public class StockView {
 
     public double upperBound() {
         return upperBound;
+    }
+
+    /** Per-stock leverage limits; unset ends fall back to the synced trading config. */
+    public LeverageRange leverage() {
+        return leverage;
     }
 
     public float price() {

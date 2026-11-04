@@ -3,7 +3,7 @@
   "stocks": [
     {
       "id": "gtnh_index",
-      "name": "GTNH 综合经济指数",
+      "name": "GTNH综合经济指数",
       "enabled": true,
       "initialPrice": 100,
       "lowerBound": 10,
@@ -23,6 +23,33 @@
           "modeId": "pull_back",
           "weight": 1,
           "switchProbability": 0.8
+        }
+      ]
+    },
+    {
+      "id": "nuclear_index",
+      "name": "轻而易举核能Ltd",
+      "enabled": true,
+      "initialPrice": 100,
+      "lowerBound": 1,
+      "upperBound": 10000,
+      "minLeverage": 100,
+      "maxLeverage": 100,
+      "modes": [
+        {
+          "modeId": "nuclear_jitter",
+          "weight": 6,
+          "switchProbability": 0.08
+        },
+        {
+          "modeId": "nuclear_trend",
+          "weight": 3,
+          "switchProbability": 0.12
+        },
+        {
+          "modeId": "nuclear_spike",
+          "weight": 1,
+          "switchProbability": 0.6
         }
       ]
     }

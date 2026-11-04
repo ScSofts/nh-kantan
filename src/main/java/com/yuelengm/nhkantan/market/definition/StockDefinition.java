@@ -6,8 +6,10 @@ import java.util.List;
 
 import javax.annotation.Nullable;
 
+import com.yuelengm.nhkantan.market.LeverageRange;
+
 /**
- * A stock from {@code stocks.json}: identity, price bounds and the modes it may run.
+ * A stock from {@code stocks.json}: identity, price bounds, optional leverage limits and the modes it may run.
  */
 public class StockDefinition {
 
@@ -17,17 +19,19 @@ public class StockDefinition {
     private final double initialPrice;
     private final double lowerBound;
     private final double upperBound;
+    private final LeverageRange leverage;
     private final List<StockModeEntry> modes;
     private final List<StockModeEntry> selectableModes;
 
     public StockDefinition(String id, String name, boolean enabled, double initialPrice, double lowerBound,
-        double upperBound, List<StockModeEntry> modes) {
+        double upperBound, LeverageRange leverage, List<StockModeEntry> modes) {
         this.id = id;
         this.name = name;
         this.enabled = enabled;
         this.initialPrice = initialPrice;
         this.lowerBound = lowerBound;
         this.upperBound = upperBound;
+        this.leverage = leverage;
         this.modes = Collections.unmodifiableList(modes);
         List<StockModeEntry> selectable = new ArrayList<>();
         for (StockModeEntry entry : modes) {
@@ -58,6 +62,11 @@ public class StockDefinition {
 
     public double upperBound() {
         return upperBound;
+    }
+
+    /** Per-stock leverage limits; unset ends fall back to the trading config. */
+    public LeverageRange leverage() {
+        return leverage;
     }
 
     public List<StockModeEntry> modes() {

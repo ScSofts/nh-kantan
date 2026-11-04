@@ -13,7 +13,9 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.storage.MapStorage;
 
 import com.yuelengm.nhkantan.config.TradingConfig;
+import com.yuelengm.nhkantan.market.LeverageRange;
 import com.yuelengm.nhkantan.market.StockSnapshot;
+import com.yuelengm.nhkantan.market.definition.StockDefinition;
 import com.yuelengm.nhkantan.market.engine.StockMarket;
 import com.yuelengm.nhkantan.market.server.MarketService;
 import com.yuelengm.nhkantan.trading.TradeResult.Status;
@@ -113,7 +115,7 @@ public class TradingService {
         if (Double.isNaN(price) || price <= 0.0D) return TradeResult.failure(Status.NOT_TRADABLE, balance);
         if (balance < 0L) return TradeResult.failure(Status.IN_DEBT, balance);
         if (marginCents <= 0L) return TradeResult.failure(Status.INVALID_MARGIN, balance);
-        InstrumentRules rules = InstrumentRuleResolver.resolve(stockId);
+        InstrumentRules rules = InstrumentRuleResolver.resolve(leverageOf(stockId));
         if (leverage < rules.minLeverage() || leverage > rules.maxLeverage()) {
             return TradeResult.failure(Status.INVALID_LEVERAGE, balance);
         }
@@ -201,6 +203,13 @@ public class TradingService {
             if (position.id() == positionId) return position;
         }
         return null;
+    }
+
+    /** Leverage limits of the running stock; stocks that are not running have no price and are refused anyway. */
+    private static LeverageRange leverageOf(String stockId) {
+        StockMarket market = market();
+        StockDefinition definition = market == null ? null : market.definition(stockId);
+        return definition == null ? LeverageRange.DEFAULT : definition.leverage();
     }
 
     @Nullable

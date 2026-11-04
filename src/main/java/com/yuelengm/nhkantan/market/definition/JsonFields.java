@@ -66,6 +66,19 @@ public class JsonFields {
         return value;
     }
 
+    public static int optionalInt(JsonObject object, String key, String location, int fallback) {
+        JsonElement element = object.get(key);
+        if (element == null || element.isJsonNull()) return fallback;
+        if (!isNumber(element)) {
+            throw new DefinitionException(location + "." + key + " must be a number");
+        }
+        double value = element.getAsDouble();
+        if (value != Math.rint(value) || value < Integer.MIN_VALUE || value > Integer.MAX_VALUE) {
+            throw new DefinitionException(location + "." + key + " must be a whole number");
+        }
+        return (int) value;
+    }
+
     public static boolean optionalBoolean(JsonObject object, String key, String location, boolean fallback) {
         JsonElement element = object.get(key);
         if (element == null || element.isJsonNull()) return fallback;

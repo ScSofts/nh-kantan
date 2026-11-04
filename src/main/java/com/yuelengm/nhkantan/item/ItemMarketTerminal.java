@@ -42,6 +42,7 @@ import com.yuelengm.nhkantan.NHKantan;
 import com.yuelengm.nhkantan.gui.WalletGui;
 import com.yuelengm.nhkantan.gui.util.GuiActions;
 import com.yuelengm.nhkantan.gui.util.Widgets;
+import com.yuelengm.nhkantan.market.LeverageRange;
 import com.yuelengm.nhkantan.market.view.ClientMarketData;
 import com.yuelengm.nhkantan.market.view.PriceFormat;
 import com.yuelengm.nhkantan.market.view.StockView;
@@ -257,6 +258,8 @@ public class ItemMarketTerminal extends Item implements IGuiHolder<PlayerInvento
     private static Flow orderForm(TradingState state) {
         return Widgets.section("tradingForm", FORM_WIDTH)
             .childPadding(2)
+            // The leverage slider is disabled for stocks with a fixed leverage
+            .collapseDisabledChild()
             .child(
                 Flow.row()
                     .fullWidth()
@@ -369,7 +372,6 @@ public class ItemMarketTerminal extends Item implements IGuiHolder<PlayerInvento
         /** Client: selects the stock for both the chart and the order form. */
         private void selectStock(String id) {
             selection = id;
-            leverage = rules().clampLeverage(leverage);
         }
 
         /** Client: the selected chart, falling back to the first stock when nothing is selected yet. */
@@ -387,8 +389,10 @@ public class ItemMarketTerminal extends Item implements IGuiHolder<PlayerInvento
             return view == null ? "" : view.name();
         }
 
+        /** Client: rules of the selected stock, from the synced trading config and the stock's leverage range. */
         private InstrumentRules rules() {
-            return InstrumentRuleResolver.resolve(selection);
+            StockView view = selectedView();
+            return InstrumentRuleResolver.resolve(view == null ? LeverageRange.DEFAULT : view.leverage());
         }
 
         private String positionSummary() {
@@ -421,17 +425,35 @@ public class ItemMarketTerminal extends Item implements IGuiHolder<PlayerInvento
             return view == null ? 0L : position.unrealizedCents(view.price());
         }
 
-        /** Client: leverage slider over the configured range, one step per whole leverage. */
+        /**
+         * Client: leverage slider over the selected stock's range, snapping to whole leverage. Its bounds follow the
+         * selection; it is hidden while the range allows a single leverage only.
+         */
         private SliderWidget leverageSlider() {
-            InstrumentRules rules = rules();
-            return new SliderWidget().widthRel(1f)
+            SliderWidget slider = new SliderWidget().widthRel(1f)
                 .height(14)
-                .bounds(rules.minLeverage(), rules.maxLeverage())
-                .stopper(1)
                 .value(
                     new DoubleValue.Dynamic(
                         () -> leverage,
                         value -> leverage = rules().clampLeverage((int) Math.round(value))));
+            applyLeverageRange(slider);
+            syncManager.onClientTick(() -> applyLeverageRange(slider));
+            return slider;
+        }
+
+        /** Client: keeps the slider bounds and the chosen leverage inside the selected stock's rules. */
+        private void applyLeverageRange(SliderWidget slider) {
+            InstrumentRules rules = rules();
+            leverage = rules.clampLeverage(leverage);
+            boolean adjustable = rules.minLeverage() < rules.maxLeverage();
+            if (slider.isEnabled() != adjustable) {
+                slider.setEnabled(adjustable);
+                if (slider.hasParent()) slider.getParent()
+                    .scheduleResize();
+            }
+            if (adjustable && (slider.getMin() != rules.minLeverage() || slider.getMax() != rules.maxLeverage())) {
+                slider.bounds(rules.minLeverage(), rules.maxLeverage());
+            }
         }
 
         private String leverageLine() {

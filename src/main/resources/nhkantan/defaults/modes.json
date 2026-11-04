@@ -21,7 +21,37 @@
       "outputType": "absolutePrice",
       "formula": "prevPrice + ((100 - prevPrice) / 1.5)",
       "variables": []
+    },
+    {
+      "id": "nuclear_jitter",
+      "name": "核电震荡",
+      "outputType": "changeRate",
+      "formula": "exp(random(-0.03, 0.03)) - 1",
+      "variables": []
+    },
+    {
+      "id": "nuclear_trend",
+      "name": "核电趋势",
+      "outputType": "changeRate",
+      "formula": "exp(drift + random(-0.015, 0.015)) - 1",
+      "variables": [
+        {
+          "name": "drift",
+          "initial": {
+            "distribution": "uniform",
+            "min": -0.02,
+            "max": 0.02
+          },
+          "update": ""
+        }
+      ]
+    },
+    {
+      "id": "nuclear_spike",
+      "name": "核电跳变",
+      "outputType": "changeRate",
+      "formula": "exp(random(-0.12, 0.12)) - 1",
+      "variables": []
     }
   ]
 }
-

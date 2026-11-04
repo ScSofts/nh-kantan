@@ -9,6 +9,7 @@ import java.util.regex.Pattern;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import com.yuelengm.nhkantan.market.LeverageRange;
 
 /**
  * Parses and validates the root object of {@code stocks.json} against the already parsed modes.
@@ -91,6 +92,21 @@ public class StockDefinitionParser {
         if (totalWeight <= 0.0D) {
             throw new DefinitionException(where + " mode weights must not all be 0");
         }
-        return new StockDefinition(id, name, enabled, initialPrice, lowerBound, upperBound, entries);
+        LeverageRange leverage = parseLeverage(json, where);
+        return new StockDefinition(id, name, enabled, initialPrice, lowerBound, upperBound, leverage, entries);
+    }
+
+    /** Optional {@code minLeverage} / {@code maxLeverage}; a missing end falls back to the trading config. */
+    private static LeverageRange parseLeverage(JsonObject json, String where) {
+        int min = JsonFields.optionalInt(json, "minLeverage", where, LeverageRange.UNSET);
+        int max = JsonFields.optionalInt(json, "maxLeverage", where, LeverageRange.UNSET);
+        LeverageRange range = new LeverageRange(min, max);
+        if ((range.hasMin() && min < 1) || (range.hasMax() && max < 1)) {
+            throw new DefinitionException(where + " leverage must be at least 1");
+        }
+        if (range.hasMin() && range.hasMax() && min > max) {
+            throw new DefinitionException(where + " must satisfy minLeverage <= maxLeverage");
+        }
+        return range;
     }
 }

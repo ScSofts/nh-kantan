@@ -1,32 +1,35 @@
 package com.yuelengm.nhkantan.trading;
 
 import com.yuelengm.nhkantan.config.TradingConfig;
+import com.yuelengm.nhkantan.market.LeverageRange;
 
 /**
- * Resolves the trading rules for a stock. All stocks currently share the synced global {@code trading} config, so
- * the same rules are available to client previews and server validation; this is the place to add per-stock rules.
+ * Resolves the trading rules for a stock from the synced global {@code trading} config and the stock's optional
+ * leverage range from {@code stocks.json}. Both reach the client (config sync and stock snapshot), so client previews
+ * and server validation use the same rules.
  */
 public class InstrumentRuleResolver {
 
     private InstrumentRuleResolver() {}
 
-    /** Rules for the stock: the global trading config with the leverage range normalized. */
-    public static InstrumentRules resolve(String stockId) {
-        int maxOpenPositions = TradingConfig.maxOpenPositionsPerStock;
-        int minLeverage = TradingConfig.minLeverage;
-        int defaultLeverage = TradingConfig.defaultLeverage;
-        int maxLeverage = TradingConfig.maxLeverage;
-        double openFeePercent = TradingConfig.openFeePercent;
-        double liquidationPercent = TradingConfig.liquidationPercent;
-        if (minLeverage > maxLeverage) minLeverage = maxLeverage;
-        if (defaultLeverage < minLeverage) defaultLeverage = minLeverage;
-        if (defaultLeverage > maxLeverage) defaultLeverage = maxLeverage;
+    /**
+     * Rules for a stock: the global trading config with the stock's leverage ends applied. A configured end that
+     * conflicts with an end set by the stock yields to it; the default leverage is kept inside the result.
+     */
+    public static InstrumentRules resolve(LeverageRange leverage) {
+        int minLeverage = leverage.hasMin() ? leverage.min() : TradingConfig.minLeverage;
+        int maxLeverage = leverage.hasMax() ? leverage.max() : TradingConfig.maxLeverage;
+        if (minLeverage > maxLeverage) {
+            if (leverage.hasMin() && !leverage.hasMax()) maxLeverage = minLeverage;
+            else minLeverage = maxLeverage;
+        }
+        int defaultLeverage = Math.min(maxLeverage, Math.max(minLeverage, TradingConfig.defaultLeverage));
         return new InstrumentRules(
-            maxOpenPositions,
+            TradingConfig.maxOpenPositionsPerStock,
             minLeverage,
             defaultLeverage,
             maxLeverage,
-            openFeePercent,
-            liquidationPercent);
+            TradingConfig.openFeePercent,
+            TradingConfig.liquidationPercent);
     }
 }

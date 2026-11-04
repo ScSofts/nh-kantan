@@ -7,6 +7,8 @@ import java.util.List;
 import java.util.Random;
 import java.util.Set;
 
+import javax.annotation.Nullable;
+
 import com.yuelengm.nhkantan.NHKantan;
 import com.yuelengm.nhkantan.market.PriceUpdate;
 import com.yuelengm.nhkantan.market.PriceWindow;
@@ -91,6 +93,18 @@ public class StockMarket {
         return updates;
     }
 
+    /**
+     * @return the definition of the running (enabled) stock, or {@code null} when it is not running
+     */
+    @Nullable
+    public StockDefinition definition(String stockId) {
+        for (Stock stock : stocks) {
+            if (stock.definition.id()
+                .equals(stockId)) return stock.definition;
+        }
+        return null;
+    }
+
     /** Public snapshots of all enabled stocks, in definition order. */
     public List<StockSnapshot> snapshots() {
         if (stocks.isEmpty()) return Collections.emptyList();
@@ -103,6 +117,7 @@ public class StockMarket {
                     definition.name(),
                     definition.lowerBound(),
                     definition.upperBound(),
+                    definition.leverage(),
                     stock.window.toArray()));
         }
         return snapshots;

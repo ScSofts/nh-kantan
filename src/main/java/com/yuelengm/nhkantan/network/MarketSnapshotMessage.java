@@ -3,6 +3,7 @@ package com.yuelengm.nhkantan.network;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.yuelengm.nhkantan.market.LeverageRange;
 import com.yuelengm.nhkantan.market.StockSnapshot;
 import com.yuelengm.nhkantan.market.view.ClientMarketData;
 
@@ -40,6 +41,12 @@ public class MarketSnapshotMessage implements IMessage {
             ByteBufUtils.writeUTF8String(buf, stock.name());
             buf.writeDouble(stock.lowerBound());
             buf.writeDouble(stock.upperBound());
+            buf.writeInt(
+                stock.leverage()
+                    .min());
+            buf.writeInt(
+                stock.leverage()
+                    .max());
             float[] prices = stock.prices();
             buf.writeInt(prices.length);
             for (float price : prices) buf.writeFloat(price);
@@ -56,9 +63,10 @@ public class MarketSnapshotMessage implements IMessage {
             String name = ByteBufUtils.readUTF8String(buf);
             double lowerBound = buf.readDouble();
             double upperBound = buf.readDouble();
+            LeverageRange leverage = new LeverageRange(buf.readInt(), buf.readInt());
             float[] prices = new float[buf.readInt()];
             for (int j = 0; j < prices.length; j++) prices[j] = buf.readFloat();
-            stocks.add(new StockSnapshot(id, name, lowerBound, upperBound, prices));
+            stocks.add(new StockSnapshot(id, name, lowerBound, upperBound, leverage, prices));
         }
     }
 
