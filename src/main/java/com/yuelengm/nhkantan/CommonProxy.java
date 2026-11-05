@@ -13,6 +13,7 @@ import com.yuelengm.nhkantan.market.server.MarketEventHandler;
 import com.yuelengm.nhkantan.market.server.MarketService;
 import com.yuelengm.nhkantan.market.view.StockView;
 import com.yuelengm.nhkantan.network.ModNetwork;
+import com.yuelengm.nhkantan.recipe.ModRecipes;
 import com.yuelengm.nhkantan.trading.TradingService;
 import com.yuelengm.nhkantan.wallet.WalletService;
 
@@ -29,6 +30,7 @@ public class CommonProxy {
         ModConfigs.register();
         ModBlocks.register();
         ModItems.register();
+        ModRecipes.register();
         ModNetwork.register();
         WalletGui.register();
         FMLCommonHandler.instance()
