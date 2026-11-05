@@ -72,7 +72,7 @@ public class StockPanelRenderer {
             return;
         }
 
-        double change = stock.windowChange();
+        double change = stock.latestChange();
         String priceText = PriceFormat.price(stock.price());
         String changeText = PriceFormat.change(change);
         float right = x + width - pad;
@@ -124,7 +124,7 @@ public class StockPanelRenderer {
         }
         drawCandles(tessellator, candles, stock.candleSlots(), scale, x0, plotRight, unit, z + zStep);
         float priceY = scale.y(stock.price());
-        int priceColor = colorOf(stock.windowChange());
+        int priceColor = colorOf(stock.latestChange());
         for (float dx = x0; dx < plotRight; dx += (DASH + DASH_GAP) * unit) {
             float end = Math.min(dx + DASH * unit, plotRight);
             quad(tessellator, dx, priceY - unit * 0.25F, end, priceY + unit * 0.25F, z + zStep, COLOR_PRICE_LINE);

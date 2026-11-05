@@ -19,6 +19,7 @@ import com.cleanroommc.modularui.api.IGuiHolder;
 import com.cleanroommc.modularui.api.drawable.IIcon;
 import com.cleanroommc.modularui.api.drawable.IKey;
 import com.cleanroommc.modularui.api.widget.IWidget;
+import com.cleanroommc.modularui.drawable.GuiTextures;
 import com.cleanroommc.modularui.factory.GuiFactories;
 import com.cleanroommc.modularui.factory.PlayerInventoryGuiData;
 import com.cleanroommc.modularui.screen.ModularPanel;
@@ -304,7 +305,7 @@ public class ItemMarketTerminal extends Item implements IGuiHolder<PlayerInvento
 
     private static String formatPrice(StockView stock) {
         if (stock == null) return "-";
-        double change = stock.windowChange();
+        double change = stock.latestChange();
         EnumChatFormatting color = change > 0.0D ? EnumChatFormatting.DARK_GREEN
             : change < 0.0D ? EnumChatFormatting.RED : EnumChatFormatting.DARK_GRAY;
         return PriceFormat.price(stock.price()) + " " + color + PriceFormat.change(change);
@@ -432,6 +433,7 @@ public class ItemMarketTerminal extends Item implements IGuiHolder<PlayerInvento
         private SliderWidget leverageSlider() {
             SliderWidget slider = new SliderWidget().widthRel(1f)
                 .height(14)
+                .background(GuiTextures.MC_BUTTON_DISABLED)
                 .value(
                     new DoubleValue.Dynamic(
                         () -> leverage,

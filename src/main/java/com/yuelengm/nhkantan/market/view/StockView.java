@@ -71,6 +71,11 @@ public class StockView {
         return prices.capacity() - 1;
     }
 
+    /** Relative change of the latest, e.g. {@code 0.05} for +5%. */
+    public double latestChange() {
+        return (double) prices.latest() / prices.get(prices.size() - 2) - 1.0D;
+    }
+
     /** Relative change over the visible window, e.g. {@code 0.05} for +5%. */
     public double windowChange() {
         return (double) prices.latest() / prices.get(0) - 1.0D;
