@@ -11,7 +11,7 @@
 ## 下载
 | GTNH  | Download                                                                                                                 |
 |-------|--------------------------------------------------------------------------------------------------------------------------|
-| 2.9.0 | [![0.1.0](https://img.shields.io/badge/release-v0.1.0-orange)](https://github.com/YueLengM/nh-kantan/releases/tag/0.1.0) |
+| 2.9.0 | [![0.1.1](https://img.shields.io/badge/release-v0.1.1-orange)](https://github.com/YueLengM/nh-kantan/releases/tag/0.1.1) |
 
 ---
 
