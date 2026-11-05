@@ -3,10 +3,10 @@
 	"modList": [{
 		"modid": "${modId}",
 		"name": "${modName}",
-		"description": "Environment-independent stock market mod for GTNH servers.",
+		"description": "Environment-independent stock market mod.",
 		"version": "${modVersion}",
 		"mcversion": "${minecraftVersion}",
-		"url": "",
+		"url": "https://github.com/YueLengM/nh-kantan",
 		"updateUrl": "",
 		"authorList": ["YueLeng_M"],
 		"credits": "",
