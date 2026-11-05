@@ -4,7 +4,6 @@ import java.math.BigDecimal;
 import java.text.DecimalFormat;
 
 import net.minecraft.util.EnumChatFormatting;
-import net.minecraft.util.StatCollector;
 
 import com.yuelengm.nhkantan.config.CurrencyConfig;
 
@@ -37,11 +36,11 @@ public class CurrencyFormat {
             : cents < 0 ? EnumChatFormatting.RED : EnumChatFormatting.DARK_GRAY;
     }
 
-    /** A balance always with two decimals, e.g. {@code 1,234.50 NHC}; red with a debt marker when negative. */
+    /** A balance always with two decimals, e.g. {@code 1,234.50 NHC}; red when negative. */
     public static String balance(long cents) {
         String text = format(BALANCE.get(), cents);
         if (cents >= 0) return text;
-        return EnumChatFormatting.RED + text + " " + StatCollector.translateToLocal("gui.nhkantan.wallet.in_debt");
+        return EnumChatFormatting.RED + text;
     }
 
     private static String format(DecimalFormat format, long cents) {

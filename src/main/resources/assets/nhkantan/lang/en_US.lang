@@ -14,7 +14,6 @@ gui.nhkantan.market.no_data=No market data
 
 gui.nhkantan.wallet.button=Wallet
 gui.nhkantan.wallet.title=Wallet
-gui.nhkantan.wallet.in_debt=(in debt)
 gui.nhkantan.wallet.balance=Balance: %s
 gui.nhkantan.wallet.withdraw_max=Max
 gui.nhkantan.wallet.exchange_list=Exchange

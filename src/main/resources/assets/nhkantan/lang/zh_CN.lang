@@ -14,7 +14,6 @@ gui.nhkantan.market.no_data=暂无行情数据
 
 gui.nhkantan.wallet.button=钱包
 gui.nhkantan.wallet.title=钱包
-gui.nhkantan.wallet.in_debt=（负债）
 gui.nhkantan.wallet.balance=余额：%s
 gui.nhkantan.wallet.withdraw_max=全部
 gui.nhkantan.wallet.exchange_list=兑换列表
