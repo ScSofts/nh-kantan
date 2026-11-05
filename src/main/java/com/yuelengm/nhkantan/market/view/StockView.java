@@ -73,12 +73,16 @@ public class StockView {
 
     /** Relative change of the latest, e.g. {@code 0.05} for +5%. */
     public double latestChange() {
-        return (double) prices.latest() / prices.get(prices.size() - 2) - 1.0D;
+        if (prices.size() < 2) return 0.0D;
+        float previous = prices.get(prices.size() - 2);
+        return previous == 0.0F ? 0.0D : (double) prices.latest() / previous - 1.0D;
     }
 
     /** Relative change over the visible window, e.g. {@code 0.05} for +5%. */
     public double windowChange() {
-        return (double) prices.latest() / prices.get(0) - 1.0D;
+        if (prices.isEmpty()) return 0.0D;
+        float first = prices.get(0);
+        return first == 0.0F ? 0.0D : (double) prices.latest() / first - 1.0D;
     }
 
     public void applyPrice(float price) {

@@ -317,7 +317,10 @@ public class TileMarketDisplay extends TileEntity implements IGuiHolder<PosGuiDa
     }
 
     private static boolean stockSelected(String stockId, String selectedId) {
-        if (selectedId != null && !selectedId.isEmpty()) return stockId.equals(selectedId);
+        if (selectedId != null && !selectedId.isEmpty()) {
+            StockView selected = ClientMarketData.INSTANCE.get(selectedId);
+            if (selected != null) return stockId.equals(selected.id());
+        }
         StockView first = ClientMarketData.INSTANCE.first();
         return first != null && stockId.equals(first.id());
     }
