@@ -32,6 +32,7 @@ gui.nhkantan.trading.no_positions=No open positions
 gui.nhkantan.trading.long=Long / Buy
 gui.nhkantan.trading.short=Short / Sell
 gui.nhkantan.trading.margin=Margin
+gui.nhkantan.trading.max_margin=Max
 gui.nhkantan.trading.leverage_value=Leverage %sx
 gui.nhkantan.trading.open_long=Long / Buy
 gui.nhkantan.trading.open_short=Short / Sell

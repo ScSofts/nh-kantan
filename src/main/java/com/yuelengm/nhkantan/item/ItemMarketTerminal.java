@@ -114,7 +114,7 @@ public class ItemMarketTerminal extends Item implements IGuiHolder<PlayerInvento
         LongSyncValue balance = WalletGui.balanceValue(player);
         syncManager.syncValue(WalletGui.BALANCE_SYNC_KEY, balance);
         InteractionSyncHandler openWallet = GuiActions.serverClick(() -> openWallet(player));
-        TradingState state = new TradingState(player, syncManager);
+        TradingState state = new TradingState(player, syncManager, balance);
 
         ModularPanel panel = ModularPanel.defaultPanel("nhkantan_market_terminal")
             .sizeRel(0.95f, 0.85f);
@@ -122,7 +122,7 @@ public class ItemMarketTerminal extends Item implements IGuiHolder<PlayerInvento
             .full()
             .padding(PADDING)
             .childPadding(GAP)
-            .child(header(balance, openWallet, state))
+            .child(header(openWallet, state))
             .child(marketView(state).expanded());
 
         return panel.child(column);
@@ -140,7 +140,7 @@ public class ItemMarketTerminal extends Item implements IGuiHolder<PlayerInvento
     }
 
     /** Title on the left; balance and the wallet button on the right, clear of the close button. */
-    private static Flow header(LongSyncValue balance, InteractionSyncHandler openWallet, TradingState state) {
+    private static Flow header(InteractionSyncHandler openWallet, TradingState state) {
         return Flow.row()
             .fullWidth()
             .height(TITLE_HEIGHT)
@@ -149,7 +149,9 @@ public class ItemMarketTerminal extends Item implements IGuiHolder<PlayerInvento
                 Widgets.text(IKey.lang("gui.nhkantan.market_terminal.title"), Alignment.CenterLeft)
                     .expanded())
             .child(
-                Widgets.text(IKey.dynamic(() -> CurrencyFormat.balance(balance.getLongValue())), Alignment.CenterRight))
+                Widgets.text(
+                    IKey.dynamic(() -> CurrencyFormat.balance(state.balance.getLongValue())),
+                    Alignment.CenterRight))
             .child(
                 new ButtonWidget<>().size(HEADER_BUTTON_WIDTH, TITLE_HEIGHT)
                     .overlay(IKey.lang("gui.nhkantan.wallet.button"))
@@ -265,13 +267,16 @@ public class ItemMarketTerminal extends Item implements IGuiHolder<PlayerInvento
                 Flow.row()
                     .fullWidth()
                     .height(18)
-                    .childPadding(2)
                     .child(Widgets.text(IKey.lang("gui.nhkantan.trading.margin")))
                     .child(
                         new TextFieldWidget().expanded()
                             .numbersLong(1, MAX_MARGIN)
                             .value(state.marginValue)
-                            .autoUpdateOnChange(true)))
+                            .autoUpdateOnChange(true))
+                    .child(
+                        new ButtonWidget<>().size(30, 18)
+                            .overlay(IKey.lang("gui.nhkantan.trading.max_margin"))
+                            .onMousePressed(GuiActions.leftClick(state::selectMaxMargin))))
             .child(Widgets.text(IKey.dynamic(state::leverageLine)))
             .child(state.leverageSlider())
             .child(
@@ -320,6 +325,7 @@ public class ItemMarketTerminal extends Item implements IGuiHolder<PlayerInvento
 
         private final EntityPlayer player;
         private final PanelSyncManager syncManager;
+        private final LongSyncValue balance;
         private final StringSyncValue positionLines;
         /** Client-only: positions decoded from {@link #positionLines}, refreshed when the synced text changes. */
         private List<Position> positions = Collections.emptyList();
@@ -334,9 +340,10 @@ public class ItemMarketTerminal extends Item implements IGuiHolder<PlayerInvento
         /** Client-only: chosen leverage, kept inside the rules of the selected stock. */
         private int leverage;
 
-        private TradingState(EntityPlayer player, PanelSyncManager syncManager) {
+        private TradingState(EntityPlayer player, PanelSyncManager syncManager, LongSyncValue balance) {
             this.player = player;
             this.syncManager = syncManager;
+            this.balance = balance;
             this.leverage = rules().defaultLeverage();
             // The server encodes the player's positions; the client only shows the synced text
             this.positionLines = new StringSyncValue(
@@ -478,7 +485,29 @@ public class ItemMarketTerminal extends Item implements IGuiHolder<PlayerInvento
 
         /** Client: margin plus fee, deducted from the wallet when opening. */
         private long total() {
-            return MathUtils.saturatedAdd(marginCents(), fee());
+            return totalFor(margin);
+        }
+
+        /** Client: margin plus opening fee for a whole-unit margin at the chosen leverage. */
+        private long totalFor(int marginUnits) {
+            long marginCents = Money.cents(marginUnits);
+            long notional = TradingMath.notional(marginCents, leverage);
+            long fee = TradingMath.openFee(notional, rules().openFeePercent());
+            return MathUtils.saturatedAdd(marginCents, fee);
+        }
+
+        /** Client: fills the margin field with the largest whole-unit margin the balance covers, fee included. */
+        private void selectMaxMargin() {
+            long balanceCents = balance.getLongValue();
+            if (balanceCents <= 0L) return;
+            int high = (int) Math.min(MAX_MARGIN, balanceCents / Money.CENTS_PER_UNIT);
+            int low = 0;
+            while (low < high) {
+                int middle = low + (high - low + 1) / 2;
+                if (totalFor(middle) <= balanceCents) low = middle;
+                else high = middle - 1;
+            }
+            if (low >= 0) margin = low;
         }
 
         /** Client: adverse price move that would liquidate the drafted position. */
