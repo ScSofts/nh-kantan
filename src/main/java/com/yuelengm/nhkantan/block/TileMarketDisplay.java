@@ -6,24 +6,35 @@ import net.minecraft.network.Packet;
 import net.minecraft.network.play.server.S35PacketUpdateTileEntity;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.AxisAlignedBB;
+import net.minecraft.util.EnumChatFormatting;
 import net.minecraft.util.MathHelper;
 import net.minecraftforge.common.util.ForgeDirection;
 
 import com.cleanroommc.modularui.api.IGuiHolder;
+import com.cleanroommc.modularui.api.drawable.IIcon;
 import com.cleanroommc.modularui.api.drawable.IKey;
+import com.cleanroommc.modularui.api.widget.IWidget;
 import com.cleanroommc.modularui.factory.PosGuiData;
 import com.cleanroommc.modularui.screen.ModularPanel;
 import com.cleanroommc.modularui.screen.ModularScreen;
 import com.cleanroommc.modularui.screen.UISettings;
+import com.cleanroommc.modularui.value.BoolValue;
 import com.cleanroommc.modularui.value.sync.DoubleSyncValue;
 import com.cleanroommc.modularui.value.sync.IntSyncValue;
 import com.cleanroommc.modularui.value.sync.PanelSyncManager;
+import com.cleanroommc.modularui.value.sync.StringSyncValue;
 import com.cleanroommc.modularui.widgets.ButtonWidget;
+import com.cleanroommc.modularui.widgets.ListWidget;
 import com.cleanroommc.modularui.widgets.SliderWidget;
+import com.cleanroommc.modularui.widgets.ToggleButton;
 import com.cleanroommc.modularui.widgets.layout.Flow;
 import com.cleanroommc.modularui.widgets.textfield.TextFieldWidget;
 import com.gtnewhorizon.gtnhlib.geometry.Orientation;
 import com.yuelengm.nhkantan.NHKantan;
+import com.yuelengm.nhkantan.gui.util.Widgets;
+import com.yuelengm.nhkantan.market.view.ClientMarketData;
+import com.yuelengm.nhkantan.market.view.PriceFormat;
+import com.yuelengm.nhkantan.market.view.StockView;
 
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
@@ -45,10 +56,17 @@ public class TileMarketDisplay extends TileEntity implements IGuiHolder<PosGuiDa
     private static final String NBT_WIDTH = "ScreenWidth";
     private static final String NBT_HEIGHT = "ScreenHeight";
     private static final String NBT_DEPTH = "ScreenDepth";
+    private static final String NBT_STOCK = "SelectedStock";
+
+    private static final int PANEL_WIDTH = 220;
+    private static final int PANEL_HEIGHT = 240;
+    private static final int STOCK_LIST_HEIGHT = 90;
+    private static final int STOCK_ROW_HEIGHT = 20;
 
     private int screenWidth = MIN_SIZE;
     private int screenHeight = MIN_SIZE;
     private double screenDepth = DEFAULT_DEPTH;
+    private String selectedStockId = "";
 
     public int getScreenWidth() {
         return screenWidth;
@@ -61,6 +79,11 @@ public class TileMarketDisplay extends TileEntity implements IGuiHolder<PosGuiDa
     /** Screen depth in pixels (1/16 block) from the mounting surface. */
     public double getScreenDepth() {
         return screenDepth;
+    }
+
+    /** Stable id of the stock shown on the screen; an empty value falls back to the first running stock. */
+    public String getSelectedStockId() {
+        return selectedStockId;
     }
 
     public void setScreenWidth(int width) {
@@ -81,6 +104,13 @@ public class TileMarketDisplay extends TileEntity implements IGuiHolder<PosGuiDa
         double d = clampDepth(depth);
         if (d == screenDepth) return;
         screenDepth = d;
+        onScreenChanged();
+    }
+
+    public void setSelectedStockId(String stockId) {
+        String id = stockId == null ? "" : stockId;
+        if (id.equals(selectedStockId)) return;
+        selectedStockId = id;
         onScreenChanged();
     }
 
@@ -151,12 +181,14 @@ public class TileMarketDisplay extends TileEntity implements IGuiHolder<PosGuiDa
         tag.setInteger(NBT_WIDTH, screenWidth);
         tag.setInteger(NBT_HEIGHT, screenHeight);
         tag.setDouble(NBT_DEPTH, screenDepth);
+        tag.setString(NBT_STOCK, selectedStockId);
     }
 
     private void readScreenData(NBTTagCompound tag) {
         screenWidth = tag.hasKey(NBT_WIDTH) ? clampSize(tag.getInteger(NBT_WIDTH)) : MIN_SIZE;
         screenHeight = tag.hasKey(NBT_HEIGHT) ? clampSize(tag.getInteger(NBT_HEIGHT)) : MIN_SIZE;
         screenDepth = tag.hasKey(NBT_DEPTH) ? clampDepth(tag.getDouble(NBT_DEPTH)) : DEFAULT_DEPTH;
+        selectedStockId = tag.hasKey(NBT_STOCK) ? tag.getString(NBT_STOCK) : "";
     }
 
     @Override
@@ -225,11 +257,13 @@ public class TileMarketDisplay extends TileEntity implements IGuiHolder<PosGuiDa
         IntSyncValue widthSync = new IntSyncValue(this::getScreenWidth, this::setScreenWidth).allowC2S();
         IntSyncValue heightSync = new IntSyncValue(this::getScreenHeight, this::setScreenHeight).allowC2S();
         DoubleSyncValue depthSync = new DoubleSyncValue(this::getScreenDepth, this::setScreenDepth).allowC2S();
+        StringSyncValue stockSync = new StringSyncValue(this::getSelectedStockId, this::setSelectedStockId).allowC2S();
         syncManager.syncValue("screen_width", 0, widthSync);
         syncManager.syncValue("screen_height", 0, heightSync);
         syncManager.syncValue("screen_depth", 0, depthSync);
+        syncManager.syncValue("screen_stock", 0, stockSync);
 
-        ModularPanel panel = ModularPanel.defaultPanel("nhkantan_market_display", 200, 160);
+        ModularPanel panel = ModularPanel.defaultPanel("nhkantan_market_display", PANEL_WIDTH, PANEL_HEIGHT);
         panel.child(
             Flow.column()
                 .widthRel(1f)
@@ -240,15 +274,59 @@ public class TileMarketDisplay extends TileEntity implements IGuiHolder<PosGuiDa
                     IKey.lang("gui.nhkantan.market_display.title")
                         .asWidget()
                         .left(0))
-                .child(
-                    IKey.lang("gui.nhkantan.market_display.placeholder")
-                        .asWidget()
-                        .left(0))
                 .child(sizeSlider("gui.nhkantan.market_display.width", widthSync))
                 .child(sizeSlider("gui.nhkantan.market_display.height", heightSync))
-                .child(depthField(depthSync)))
-            .child(ButtonWidget.panelCloseButton());
+                .child(depthField(depthSync))
+                .child(
+                    IKey.lang("gui.nhkantan.market_display.stock")
+                        .asWidget()
+                        .left(0))
+                .child(stockList(stockSync).expanded()))
+            .child(ButtonWidget.panelCloseButton())
+            .padding(Widgets.SECTION_PADDING);
         return panel;
+    }
+
+    /** Scrollable stock list selecting the stock rendered by the in-world screen. */
+    private static ListWidget<IWidget, ?> stockList(StringSyncValue selected) {
+        ListWidget<IWidget, ?> list = new ListWidget<>().widthRel(1f)
+            .height(STOCK_LIST_HEIGHT)
+            .childSeparator(IIcon.EMPTY_2PX);
+        if (ClientMarketData.INSTANCE.stocks()
+            .isEmpty()) {
+            list.child(
+                IKey.lang("gui.nhkantan.market.no_data")
+                    .asWidget()
+                    .widthRel(1f));
+            return list;
+        }
+        for (StockView stock : ClientMarketData.INSTANCE.stocks()) {
+            list.child(stockButton(stock, selected));
+        }
+        return list;
+    }
+
+    private static ToggleButton stockButton(StockView stock, StringSyncValue selected) {
+        return new ToggleButton().widthRel(1f)
+            .height(STOCK_ROW_HEIGHT)
+            .value(
+                new BoolValue.Dynamic(
+                    () -> stockSelected(stock.id(), selected.getStringValue()),
+                    value -> { if (value) selected.setStringValue(stock.id(), true, true); }))
+            .overlay(IKey.str(stock.name()));
+    }
+
+    private static boolean stockSelected(String stockId, String selectedId) {
+        if (selectedId != null && !selectedId.isEmpty()) return stockId.equals(selectedId);
+        StockView first = ClientMarketData.INSTANCE.first();
+        return first != null && stockId.equals(first.id());
+    }
+
+    private static String formatPrice(StockView stock) {
+        double change = stock.latestChange();
+        EnumChatFormatting color = change > 0.0D ? EnumChatFormatting.DARK_GREEN
+            : change < 0.0D ? EnumChatFormatting.RED : EnumChatFormatting.DARK_GRAY;
+        return PriceFormat.price(stock.price()) + " " + color + PriceFormat.change(change);
     }
 
     /** Label with the current value, followed by a 1-step slider over [MIN_SIZE, MAX_SIZE]. */

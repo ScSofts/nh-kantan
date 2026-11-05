@@ -3,6 +3,7 @@ tile.nhkantan.market_display.name=股市显示器
 
 gui.nhkantan.market_display.title=股市终端
 gui.nhkantan.market_display.placeholder=股市功能开发中……
+gui.nhkantan.market_display.stock=显示股票
 gui.nhkantan.market_display.width=大屏宽度：%s
 gui.nhkantan.market_display.height=大屏高度：%s
 gui.nhkantan.market_display.depth=屏幕深度（像素）

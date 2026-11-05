@@ -3,6 +3,7 @@ tile.nhkantan.market_display.name=Market Display
 
 gui.nhkantan.market_display.title=Market Terminal
 gui.nhkantan.market_display.placeholder=Market features coming soon...
+gui.nhkantan.market_display.stock=Displayed Stock
 gui.nhkantan.market_display.width=Screen Width: %s
 gui.nhkantan.market_display.height=Screen Height: %s
 gui.nhkantan.market_display.depth=Screen Depth (px)

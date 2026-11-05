@@ -16,6 +16,7 @@ import com.gtnewhorizon.gtnhlib.geometry.Orientation;
 import com.yuelengm.nhkantan.block.MarketDisplayOrientation;
 import com.yuelengm.nhkantan.block.TileMarketDisplay;
 import com.yuelengm.nhkantan.market.view.ClientMarketData;
+import com.yuelengm.nhkantan.market.view.StockView;
 
 /**
  * Draws the "big screen" of a market display in the world.
@@ -76,7 +77,7 @@ public class MarketDisplayRenderer extends TileEntitySpecialRenderer {
         GL11.glDisable(GL11.GL_LIGHTING);
         GL11.glDisable(GL11.GL_CULL_FACE);
 
-        drawScreen(width, height);
+        drawScreen(width, height, display.getSelectedStockId());
 
         GL11.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
         GL11.glEnable(GL11.GL_CULL_FACE);
@@ -109,8 +110,8 @@ public class MarketDisplayRenderer extends TileEntitySpecialRenderer {
         GL11.glMultMatrix(basis);
     }
 
-    /** Bezel, then the shared stock panel (first stock of the client market data) inside it. */
-    private void drawScreen(int width, int height) {
+    /** Bezel, then the selected stock's shared panel inside it. */
+    private void drawScreen(int width, int height, String selectedStockId) {
         GL11.glDisable(GL11.GL_TEXTURE_2D);
         Tessellator tessellator = Tessellator.instance;
         tessellator.startDrawingQuads();
@@ -124,9 +125,12 @@ public class MarketDisplayRenderer extends TileEntitySpecialRenderer {
 
         FontRenderer font = func_147498_b();
         if (font == null) return;
+        StockView selected = selectedStockId == null || selectedStockId.isEmpty() ? null
+            : ClientMarketData.INSTANCE.get(selectedStockId);
+        if (selected == null) selected = ClientMarketData.INSTANCE.first();
         StockPanelRenderer.draw(
             font,
-            ClientMarketData.INSTANCE.first(),
+            selected,
             BEZEL,
             BEZEL,
             width - BEZEL * 2.0F,
