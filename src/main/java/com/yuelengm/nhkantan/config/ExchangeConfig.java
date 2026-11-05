@@ -16,7 +16,7 @@ public class ExchangeConfig {
     @Config.Comment({ "Items exchangeable with the market currency in both directions, one per entry:",
         "modid:itemName;meta;depositValue;withdrawValue",
         "0 or negative value disables that direction (deposit-only or withdraw-only items)." })
-    @Config.DefaultStringList({ "minecraft:diamond;0;100;110" })
+    @Config.DefaultStringList({})
     public static String[] currencyItems;
 
     @Config.Comment({ "Items accepted to repay a negative balance, one per entry: modid:itemName;meta;value",
