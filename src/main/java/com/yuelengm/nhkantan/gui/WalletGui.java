@@ -26,7 +26,6 @@ import com.cleanroommc.modularui.value.ObjectValue;
 import com.cleanroommc.modularui.value.sync.LongSyncValue;
 import com.cleanroommc.modularui.value.sync.PanelSyncManager;
 import com.cleanroommc.modularui.widgets.ButtonWidget;
-import com.cleanroommc.modularui.widgets.ItemDisplayWidget;
 import com.cleanroommc.modularui.widgets.ListWidget;
 import com.cleanroommc.modularui.widgets.SlotGroupWidget;
 import com.cleanroommc.modularui.widgets.TextWidget;
@@ -37,6 +36,7 @@ import com.cleanroommc.modularui.widgets.slot.ModularSlot;
 import com.cleanroommc.modularui.widgets.textfield.TextFieldWidget;
 import com.yuelengm.nhkantan.NHKantan;
 import com.yuelengm.nhkantan.gui.util.GuiActions;
+import com.yuelengm.nhkantan.gui.util.ItemDisplayWidgetEx;
 import com.yuelengm.nhkantan.gui.util.Widgets;
 import com.yuelengm.nhkantan.item.ItemMarketTerminal;
 import com.yuelengm.nhkantan.util.MathUtils;
@@ -178,7 +178,7 @@ public class WalletGui implements IGuiHolder<GuiData> {
                     .height(SLOT_SIZE)
                     .childPadding(2)
                     .child(
-                        new ItemDisplayWidget()
+                        new ItemDisplayWidgetEx()
                             .item(new ObjectValue.Dynamic<>(ItemStack.class, state::selectedStack, null))
                             .size(SLOT_SIZE))
                     .child(
