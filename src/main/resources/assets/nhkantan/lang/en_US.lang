@@ -1,13 +1,10 @@
-# NH kantan language file - English
 tile.nhkantan.market_display.name=Market Display
 
-gui.nhkantan.market_display.title=Market Terminal
-gui.nhkantan.market_display.placeholder=Market features coming soon...
+gui.nhkantan.market_display.title=Market Display
 gui.nhkantan.market_display.stock=Displayed Stock
 gui.nhkantan.market_display.width=Screen Width: %s
 gui.nhkantan.market_display.height=Screen Height: %s
 gui.nhkantan.market_display.depth=Screen Depth (px)
-
 
 item.nhkantan.market_terminal.name=Market Terminal
 gui.nhkantan.market_terminal.title=Market Terminal
@@ -41,7 +38,6 @@ gui.nhkantan.trading.close=Close
 gui.nhkantan.trading.not_tradable=Not tradable right now
 gui.nhkantan.trading.summary=%s positions, %s profit
 
-# Config GUI (GTNHLib, pattern %mod.%cat.%field; tooltips use .tooltip)
 nhkantan.market=Market
 nhkantan.market.tooltip=Price engine settings. Stocks and modes are defined in stocks.json and modes.json.
 nhkantan.market.updateintervalticks=Update Interval (ticks)
@@ -88,6 +84,5 @@ nhkantan.compat.gtnhcoindebtvalue=Coin Debt Value
 nhkantan.compat.gtnhcoindebtvalue.tooltip=Debt repaid per base coin. 0 or negative disables repaying with coins.
 gui.nhkantan.trading.notional=Notional
 gui.nhkantan.trading.fee=Opening fee
-gui.nhkantan.trading.total=Total cost
 gui.nhkantan.trading.liquidation_move=Liquidation at adverse move
 gui.nhkantan.trading.liquidation_off=Off

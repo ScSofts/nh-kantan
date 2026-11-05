@@ -1,16 +1,13 @@
-# NH kantan language file - Chinese (zh_CN)
 tile.nhkantan.market_display.name=股市显示器
 
-gui.nhkantan.market_display.title=股市终端
-gui.nhkantan.market_display.placeholder=股市功能开发中……
+gui.nhkantan.market_display.title=股市显示器
 gui.nhkantan.market_display.stock=显示股票
 gui.nhkantan.market_display.width=大屏宽度：%s
 gui.nhkantan.market_display.height=大屏高度：%s
 gui.nhkantan.market_display.depth=屏幕深度（像素）
 
-
-item.nhkantan.market_terminal.name=股市终端
-gui.nhkantan.market_terminal.title=股市终端
+item.nhkantan.market_terminal.name=投资终端
+gui.nhkantan.market_terminal.title=投资终端
 gui.nhkantan.market.no_data=暂无行情数据
 
 gui.nhkantan.wallet.button=钱包
@@ -41,7 +38,6 @@ gui.nhkantan.trading.close=平仓
 gui.nhkantan.trading.not_tradable=当前不可交易
 gui.nhkantan.trading.summary=持仓 %s，浮盈 %s
 
-# Config GUI (GTNHLib, pattern %mod.%cat.%field; tooltips use .tooltip)
 nhkantan.market=行情
 nhkantan.market.tooltip=价格引擎设置。股票和行情模式在 stocks.json 与 modes.json 中定义。
 nhkantan.market.updateintervalticks=价格更新间隔（tick）
