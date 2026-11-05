@@ -63,7 +63,7 @@ public class Widgets {
 
     /** An item icon without the slot background. */
     public static ItemDisplayWidget itemIcon(ItemStack stack) {
-        return new ItemDisplayWidget().item(stack)
+        return new ItemDisplayWidgetEx().item(stack)
             .disableThemeBackground(true)
             .disableHoverThemeBackground(true);
     }
