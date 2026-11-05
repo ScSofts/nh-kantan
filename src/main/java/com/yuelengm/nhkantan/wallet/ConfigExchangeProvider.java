@@ -18,7 +18,7 @@ public class ConfigExchangeProvider implements ExchangeProvider {
     private String[] currencySource;
     private List<CurrencyItem> currencyItems = Collections.emptyList();
     private String[] debtSource;
-    private List<DebtItem> debtItems = Collections.emptyList();
+    private List<CurrencyItem> debtItems = Collections.emptyList();
 
     /**
      * Entries of {@code currencyItems}: {@code modid:itemName;meta;depositValue;withdrawValue}
@@ -35,7 +35,7 @@ public class ConfigExchangeProvider implements ExchangeProvider {
 
     /** Entries of {@code debtItems}: {@code modid:itemName;meta;value} */
     @Override
-    public synchronized List<DebtItem> debtItems() {
+    public synchronized List<CurrencyItem> debtItems() {
         String[] source = ExchangeConfig.debtItems;
         if (source != debtSource) {
             debtSource = source;
@@ -50,16 +50,20 @@ public class ConfigExchangeProvider implements ExchangeProvider {
         if (depositValue < 0.0D && withdrawValue < 0.0D) {
             throw new IllegalArgumentException("depositValue and withdrawValue are both disabled");
         }
+        if (withdrawValue == CurrencyItem.DEBT_WITHDRAW_VALUE) {
+            throw new IllegalArgumentException("withdrawValue -1 is reserved for debtItems");
+        }
         return new CurrencyItem(
             Denominations.single(ConfigEntries.parseItem(fields[0], fields[1])),
             depositValue,
             withdrawValue);
     }
 
-    private static DebtItem parseDebt(String[] fields) {
-        return new DebtItem(
+    private static CurrencyItem parseDebt(String[] fields) {
+        return new CurrencyItem(
             Denominations.single(ConfigEntries.parseItem(fields[0], fields[1])),
-            ConfigEntries.parsePositive(fields[2], "value"));
+            ConfigEntries.parsePositive(fields[2], "value"),
+            CurrencyItem.DEBT_WITHDRAW_VALUE);
     }
 
     /** A positive value, or a negative one meaning the direction is disabled; zero is rejected. */

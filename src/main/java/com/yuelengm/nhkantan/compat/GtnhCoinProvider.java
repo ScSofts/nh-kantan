@@ -14,7 +14,6 @@ import com.yuelengm.nhkantan.config.CompatConfig;
 import com.yuelengm.nhkantan.util.Denominations;
 import com.yuelengm.nhkantan.util.ItemSpec;
 import com.yuelengm.nhkantan.wallet.CurrencyItem;
-import com.yuelengm.nhkantan.wallet.DebtItem;
 import com.yuelengm.nhkantan.wallet.ExchangeItems;
 import com.yuelengm.nhkantan.wallet.ExchangeProvider;
 
@@ -49,7 +48,7 @@ public class GtnhCoinProvider implements ExchangeProvider {
 
     private double[] source;
     private List<CurrencyItem> currencyItems = Collections.emptyList();
-    private List<DebtItem> debtItems = Collections.emptyList();
+    private List<CurrencyItem> debtItems = Collections.emptyList();
 
     /** Registers the provider when the core mod is present. */
     public static void registerIfLoaded() {
@@ -63,7 +62,7 @@ public class GtnhCoinProvider implements ExchangeProvider {
     }
 
     @Override
-    public synchronized List<DebtItem> debtItems() {
+    public synchronized List<CurrencyItem> debtItems() {
         refresh();
         return debtItems;
     }
@@ -74,13 +73,13 @@ public class GtnhCoinProvider implements ExchangeProvider {
         if (Arrays.equals(current, source)) return;
         source = current;
         List<CurrencyItem> currency = new ArrayList<>();
-        List<DebtItem> debt = new ArrayList<>();
+        List<CurrencyItem> debt = new ArrayList<>();
         if (CompatConfig.gtnhCoins) build(currency, debt);
         currencyItems = Collections.unmodifiableList(currency);
         debtItems = Collections.unmodifiableList(debt);
     }
 
-    private static void build(List<CurrencyItem> currency, List<DebtItem> debt) {
+    private static void build(List<CurrencyItem> currency, List<CurrencyItem> debt) {
         boolean exchangeable = CompatConfig.gtnhCoinDepositValue >= 0.0D || CompatConfig.gtnhCoinWithdrawValue >= 0.0D;
         boolean repayable = CompatConfig.gtnhCoinDebtValue > 0.0D;
         for (String type : COIN_TYPES) {
@@ -90,7 +89,9 @@ public class GtnhCoinProvider implements ExchangeProvider {
                 currency.add(
                     new CurrencyItem(coins, CompatConfig.gtnhCoinDepositValue, CompatConfig.gtnhCoinWithdrawValue));
             }
-            if (repayable) debt.add(new DebtItem(coins, CompatConfig.gtnhCoinDebtValue));
+            if (repayable) {
+                debt.add(new CurrencyItem(coins, CompatConfig.gtnhCoinDebtValue, CurrencyItem.DEBT_WITHDRAW_VALUE));
+            }
         }
     }
 

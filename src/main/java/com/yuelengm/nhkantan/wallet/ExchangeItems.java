@@ -19,8 +19,8 @@ public class ExchangeItems {
 
     private static List<List<CurrencyItem>> currencySources = Collections.emptyList();
     private static List<CurrencyItem> currencyItems = Collections.emptyList();
-    private static List<List<DebtItem>> debtSources = Collections.emptyList();
-    private static List<DebtItem> debtItems = Collections.emptyList();
+    private static List<List<CurrencyItem>> debtSources = Collections.emptyList();
+    private static List<CurrencyItem> debtItems = Collections.emptyList();
 
     static {
         register(new ConfigExchangeProvider());
@@ -41,7 +41,7 @@ public class ExchangeItems {
         return currencyItems;
     }
 
-    public static synchronized List<DebtItem> debtItems() {
+    public static synchronized List<CurrencyItem> debtItems() {
         if (changed(debtSources, ExchangeProvider::debtItems)) {
             debtSources = collect(ExchangeProvider::debtItems);
             debtItems = merge(debtSources);
@@ -67,8 +67,8 @@ public class ExchangeItems {
     }
 
     @Nullable
-    public static DebtItem findDebt(ItemStack stack) {
-        for (DebtItem item : debtItems()) {
+    public static CurrencyItem findDebt(ItemStack stack) {
+        for (CurrencyItem item : debtItems()) {
             if (item.items()
                 .unitsPer(stack) > 0) return item;
         }

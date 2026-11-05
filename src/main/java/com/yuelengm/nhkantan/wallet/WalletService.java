@@ -70,7 +70,7 @@ public class WalletService {
         for (ItemStack stack : stacks) {
             if (stack == null) continue;
             if (balance < 0) {
-                DebtItem item = ExchangeItems.findDebt(stack);
+                CurrencyItem item = ExchangeItems.findDebt(stack);
                 if (item != null) total = MathUtils.saturatedAdd(total, item.repayment(units(item.items(), stack)));
             } else {
                 CurrencyItem item = ExchangeItems.findDeposit(stack);
@@ -106,7 +106,7 @@ public class WalletService {
         WalletResult result;
         int unitsPerItem;
         if (balance(id) < 0) {
-            DebtItem item = ExchangeItems.findDebt(stack);
+            CurrencyItem item = ExchangeItems.findDebt(stack);
             if (item == null) return 0;
             unitsPerItem = item.items()
                 .unitsPer(stack);
@@ -160,7 +160,7 @@ public class WalletService {
      * Repays debt with up to {@code offered} base units, never using more than needed to reach zero. The caller
      * removes the items for {@link WalletResult#units()} units on success.
      */
-    public WalletResult repay(UUID player, DebtItem item, int offered) {
+    public WalletResult repay(UUID player, CurrencyItem item, int offered) {
         long balance = balance(player);
         if (balance >= 0) return WalletResult.failure(Status.NOT_IN_DEBT, balance);
         int count = Math.min(offered, item.unitsToClear(-balance));

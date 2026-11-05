@@ -17,6 +17,7 @@ gui.nhkantan.wallet.title=钱包
 gui.nhkantan.wallet.balance=余额：%s
 gui.nhkantan.wallet.withdraw_max=全部
 gui.nhkantan.wallet.exchange_list=兑换列表
+gui.nhkantan.wallet.debt_list=还款物品
 gui.nhkantan.wallet.withdraw=取出
 gui.nhkantan.wallet.withdraw_locked=负债中，无法兑换
 gui.nhkantan.wallet.step_hint=按住 Shift 每次 %s 个

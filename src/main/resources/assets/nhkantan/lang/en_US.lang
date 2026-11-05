@@ -17,6 +17,7 @@ gui.nhkantan.wallet.title=Wallet
 gui.nhkantan.wallet.balance=Balance: %s
 gui.nhkantan.wallet.withdraw_max=Max
 gui.nhkantan.wallet.exchange_list=Exchange
+gui.nhkantan.wallet.debt_list=Debt Repayment
 gui.nhkantan.wallet.withdraw=Withdraw
 gui.nhkantan.wallet.withdraw_locked=Withdrawal is locked while in debt
 gui.nhkantan.wallet.step_hint=Hold Shift for %s at a time

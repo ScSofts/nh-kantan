@@ -228,19 +228,13 @@ public class WalletGui implements IGuiHolder<GuiData> {
 
     private static Flow rightColumn(WalletState state) {
         ListWidget<IWidget, ?> list = new ListWidget<>().fullWidth();
-        List<CurrencyItem> items = ExchangeItems.currencyItems();
-        if (items.isEmpty()) {
-            list.child(Widgets.text(IKey.lang("gui.nhkantan.wallet.no_currency_items"), RIGHT_WIDTH - SCROLLBAR_SPACE));
-        }
-        for (int i = 0; i < items.size(); i++) {
-            list.child(exchangeRow(state, i, items.get(i)));
-        }
+        state.trackItemList(list);
         return Flow.column()
             .width(RIGHT_WIDTH)
             .fullHeight()
             .childPadding(1)
             .child(
-                Widgets.text(IKey.lang("gui.nhkantan.wallet.exchange_list"))
+                Widgets.text(IKey.dynamic(state::itemListTitle))
                     .fullWidth())
             .child(list.expanded());
     }
@@ -277,6 +271,14 @@ public class WalletGui implements IGuiHolder<GuiData> {
     /** {@code +credit} in green when depositable, {@code -cost} in red when withdrawable, per item. */
     private static String rates(CurrencyItem item) {
         StringBuilder text = new StringBuilder();
+        if (item.isDebtItem()) {
+            if (item.canRepay()) {
+                text.append(EnumChatFormatting.DARK_GREEN)
+                    .append('+')
+                    .append(CurrencyFormat.amount(item.repayment(1)));
+            }
+            return text.toString();
+        }
         if (item.canDeposit()) {
             text.append(EnumChatFormatting.DARK_GREEN)
                 .append('+')
@@ -303,6 +305,9 @@ public class WalletGui implements IGuiHolder<GuiData> {
         private final ItemStackHandler depositSlots = new ItemStackHandler(DEPOSIT_SLOTS);
         /** Client-only: index of the selected currency item, or {@link #NO_SELECTION}. */
         private int selection = NO_SELECTION;
+        /** Client-only: whether the right list currently shows debt entries. */
+        private boolean renderedDebt;
+        private boolean itemListBuilt;
         /** Client-only: quantity to withdraw. */
         private int quantity = 1;
         private final IntValue.Dynamic quantityValue = new IntValue.Dynamic(
@@ -324,6 +329,39 @@ public class WalletGui implements IGuiHolder<GuiData> {
 
         private long balance() {
             return balance.getLongValue();
+        }
+
+        private String itemListTitle() {
+            return StatCollector.translateToLocal(
+                balance() < 0 ? "gui.nhkantan.wallet.debt_list" : "gui.nhkantan.wallet.exchange_list");
+        }
+
+        /** Client: swaps the right list between exchange and debt entries when the balance crosses zero. */
+        private void trackItemList(ListWidget<IWidget, ?> list) {
+            renderItemList(list);
+            syncManager.onClientTick(() -> {
+                if (itemListBuilt && renderedDebt == (balance() < 0)) return;
+                renderItemList(list);
+            });
+        }
+
+        private void renderItemList(ListWidget<IWidget, ?> list) {
+            boolean debt = balance() < 0;
+            renderedDebt = debt;
+            itemListBuilt = true;
+            if (debt) selection = NO_SELECTION;
+            list.removeAll();
+            List<CurrencyItem> items = debt ? ExchangeItems.debtItems() : ExchangeItems.currencyItems();
+            if (items.isEmpty()) {
+                list.child(
+                    Widgets.text(
+                        IKey.lang(debt ? "gui.nhkantan.wallet.no_debt_items" : "gui.nhkantan.wallet.no_currency_items"),
+                        RIGHT_WIDTH - SCROLLBAR_SPACE));
+                return;
+            }
+            for (int i = 0; i < items.size(); i++) {
+                list.child(exchangeRow(this, i, items.get(i)));
+            }
         }
 
         /** Client: the selected withdrawable item, or {@code null}. */
