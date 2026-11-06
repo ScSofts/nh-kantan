@@ -18,37 +18,29 @@ import com.yuelengm.nhkantan.util.MathUtils;
  */
 public class Widgets {
 
-    /** Height of a single line of text. */
-    public static final int LINE_HEIGHT = 10;
-    /** Inner padding of a {@link #section}. */
-    public static final int SECTION_PADDING = 4;
+    private static final int GUI_BORDER_WIDTH = 3;
+
+    public static final int LINE_HEIGHT = 9;
+    public static final int PADDING = 4;
+    public static final int PANEL_PADDING = GUI_BORDER_WIDTH + PADDING;
+    public static final int GAP = 3;
 
     private Widgets() {}
 
     /** A single left-aligned line of text; its width is left to the caller or the parent layout. */
     public static TextWidget<?> text(IKey key) {
-        return text(key, Alignment.CenterLeft);
-    }
-
-    /** A single line of text with the given alignment; its width is left to the caller or the parent layout. */
-    public static TextWidget<?> text(IKey key, Alignment alignment) {
-        return key.asWidget()
-            .height(LINE_HEIGHT)
-            .textAlign(alignment);
-    }
-
-    /** A single left-aligned line of text with a fixed width. */
-    public static TextWidget<?> text(IKey key, int width) {
-        return text(key).width(width);
+        return key.asWidget();
     }
 
     /** One full-width line: label on the left, value on the right. */
     public static Flow labeledValue(IKey label, IKey value) {
         return Flow.row()
-            .fullWidth()
             .height(LINE_HEIGHT)
+            .fullWidth()
             .child(text(label).expanded())
-            .child(text(value, Alignment.CenterRight));
+            .child(
+                value.asWidget()
+                    .textAlign(Alignment.CenterRight));
     }
 
     /** A framed column with slot-like background, sized to its children. */
@@ -58,7 +50,7 @@ public class Widgets {
             .background(GuiTextures.SLOT_ITEM)
             .width(width)
             .coverChildrenHeight()
-            .padding(SECTION_PADDING);
+            .padding(PADDING);
     }
 
     /** An item icon without the slot background. */

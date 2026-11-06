@@ -283,7 +283,7 @@ public class TileMarketDisplay extends TileEntity implements IGuiHolder<PosGuiDa
                         .left(0))
                 .child(stockList(stockSync).expanded()))
             .child(ButtonWidget.panelCloseButton())
-            .padding(Widgets.SECTION_PADDING);
+            .padding(Widgets.PADDING);
         return panel;
     }
 
