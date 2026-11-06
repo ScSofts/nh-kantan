@@ -40,6 +40,8 @@ import com.cleanroommc.modularui.widgets.ToggleButton;
 import com.cleanroommc.modularui.widgets.layout.Flow;
 import com.cleanroommc.modularui.widgets.textfield.TextFieldWidget;
 import com.yuelengm.nhkantan.NHKantan;
+import com.yuelengm.nhkantan.config.ClientConfig;
+import com.yuelengm.nhkantan.gui.RealLifeWarningGui;
 import com.yuelengm.nhkantan.gui.WalletGui;
 import com.yuelengm.nhkantan.gui.util.GuiActions;
 import com.yuelengm.nhkantan.gui.util.Widgets;
@@ -95,11 +97,22 @@ public class ItemMarketTerminal extends Item implements IGuiHolder<PlayerInvento
 
     @Override
     public ItemStack onItemRightClick(ItemStack stack, World world, EntityPlayer player) {
-        if (!world.isRemote) {
-            GuiFactories.playerInventory()
-                .openFromMainHand(player);
+        if (world.isRemote) {
+            openTerminalClient();
         }
         return stack;
+    }
+
+    @SideOnly(Side.CLIENT)
+    private static void openTerminalClient() {
+        if (ClientConfig.showLifeWarning) {
+            RealLifeWarningGui.openClient(
+                () -> GuiFactories.playerInventory()
+                    .openFromMainHandClient());
+        } else {
+            GuiFactories.playerInventory()
+                .openFromMainHandClient();
+        }
     }
 
     @Override

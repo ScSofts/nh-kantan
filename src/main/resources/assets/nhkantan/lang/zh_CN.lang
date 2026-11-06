@@ -10,6 +10,14 @@ item.nhkantan.market_terminal.name=投资终端
 gui.nhkantan.market_terminal.title=投资终端
 gui.nhkantan.market.no_data=暂无行情数据
 
+gui.nhkantan.life_warning.title=重要提示
+gui.nhkantan.life_warning.body1=这里的股市只是 Minecraft 中的游戏机制。
+gui.nhkantan.life_warning.body2=它不是现实投资，也不会产生任何真实收益。
+gui.nhkantan.life_warning.body3=本模组不构成任何投资建议。
+gui.nhkantan.life_warning.body4=请把所有盈亏都当作游戏内容。
+gui.nhkantan.life_warning.dont_show=不再显示此警告
+gui.nhkantan.life_warning.confirm=进入投资终端
+
 gui.nhkantan.wallet.button=钱包
 gui.nhkantan.wallet.title=钱包
 gui.nhkantan.wallet.balance=余额：%s
@@ -66,6 +74,10 @@ nhkantan.currency.name=货币名称
 nhkantan.currency.name.tooltip=市场币的显示名称。
 nhkantan.currency.initialbalance=初始余额
 nhkantan.currency.initialbalance.tooltip=新玩家账户创建时的余额。
+nhkantan.client=客户端
+nhkantan.client.tooltip=客户端显示设置。
+nhkantan.client.showlifewarning=显示游戏警告
+nhkantan.client.showlifewarning.tooltip=打开投资终端前显示“这不是现实投资”的警告。
 nhkantan.exchange=兑换
 nhkantan.exchange.tooltip=市场币与物品之间的兑换，以及可用于还债的物品。
 nhkantan.exchange.currencyitems=兑换货币

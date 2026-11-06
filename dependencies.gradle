@@ -42,4 +42,6 @@ dependencies {
 
     runtimeOnlyNonPublishable("com.cubefury.vendingmachine:VendingMachine:0.4.87:dev")
     runtimeOnlyNonPublishable("com.github.GTNewHorizons:NewHorizonsCoreMod:2.8.279:dev")
+
+    implementation("org.jetbrains:annotations:23.0.0")
 }

@@ -28,4 +28,5 @@ public class ClientProxy extends CommonProxy {
     public Widget<?> createStockChart(Supplier<StockView> stock) {
         return new StockChartWidget(stock);
     }
+
 }
