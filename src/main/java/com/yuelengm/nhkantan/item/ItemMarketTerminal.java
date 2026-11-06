@@ -1,5 +1,8 @@
 package com.yuelengm.nhkantan.item;
 
+import static com.yuelengm.nhkantan.gui.util.Widgets.GAP;
+import static com.yuelengm.nhkantan.gui.util.Widgets.PANEL_PADDING;
+
 import java.util.Collections;
 import java.util.List;
 
@@ -71,20 +74,13 @@ import cpw.mods.fml.relauncher.SideOnly;
  */
 public class ItemMarketTerminal extends Item implements IGuiHolder<PlayerInventoryGuiData> {
 
-    private static final int PANEL_WIDTH = 560;
-    private static final int PANEL_HEIGHT = 240;
-    private static final int PADDING = 7;
-    private static final int GAP = 4;
     private static final int TITLE_HEIGHT = 14;
-    private static final int CLOSE_BUTTON_SPACE = 12;
     private static final int HEADER_BUTTON_WIDTH = 40;
     private static final int FORM_WIDTH = 120;
     private static final int BUTTON_HEIGHT = 20;
     private static final int SMALL_BUTTON_HEIGHT = 14;
-    private static final int CHART_HEIGHT = 136;
-    private static final int STEP_BUTTON_WIDTH = 14;
+    private static final int CHART_HEIGHT = 140;
     private static final int MAX_MARGIN = 999_999_999;
-    private static final int SHIFT_STEP = 10;
     private static final String OPEN_ACTION = "trading_open";
     private static final String CLOSE_ACTION = "trading_close";
 
@@ -130,10 +126,10 @@ public class ItemMarketTerminal extends Item implements IGuiHolder<PlayerInvento
         TradingState state = new TradingState(player, syncManager, balance);
 
         ModularPanel panel = ModularPanel.defaultPanel("nhkantan_market_terminal")
-            .sizeRel(0.95f, 0.85f);
+            .sizeRel(0.95f, 0.85f)
+            .padding(PANEL_PADDING);
         Flow column = Flow.column()
             .full()
-            .padding(PADDING)
             .childPadding(GAP)
             .child(header(openWallet, state))
             .child(marketView(state).expanded());
@@ -159,12 +155,12 @@ public class ItemMarketTerminal extends Item implements IGuiHolder<PlayerInvento
             .height(TITLE_HEIGHT)
             .childPadding(GAP)
             .child(
-                Widgets.text(IKey.lang("gui.nhkantan.market_terminal.title"), Alignment.CenterLeft)
+                Widgets.text(IKey.lang("gui.nhkantan.market_terminal.title"))
                     .expanded())
             .child(
-                Widgets.text(
-                    IKey.dynamic(() -> CurrencyFormat.balance(state.balance.getLongValue())),
-                    Alignment.CenterRight))
+                IKey.dynamic(() -> CurrencyFormat.balance(state.balance.getLongValue()))
+                    .asWidget()
+                    .textAlign(Alignment.CenterRight))
             .child(
                 new ButtonWidget<>().size(HEADER_BUTTON_WIDTH, TITLE_HEIGHT)
                     .overlay(IKey.lang("gui.nhkantan.wallet.button"))
@@ -290,7 +286,9 @@ public class ItemMarketTerminal extends Item implements IGuiHolder<PlayerInvento
                         new ButtonWidget<>().size(30, 18)
                             .overlay(IKey.lang("gui.nhkantan.trading.max_margin"))
                             .onMousePressed(GuiActions.leftClick(state::selectMaxMargin))))
-            .child(Widgets.text(IKey.dynamic(state::leverageLine)))
+            .child(
+                Widgets
+                    .labeledValue(IKey.lang("gui.nhkantan.trading.leverage"), IKey.dynamic(() -> state.leverage + "x")))
             .child(state.leverageSlider())
             .child(
                 Widgets.labeledValue(
@@ -476,10 +474,6 @@ public class ItemMarketTerminal extends Item implements IGuiHolder<PlayerInvento
             if (adjustable && (slider.getMin() != rules.minLeverage() || slider.getMax() != rules.maxLeverage())) {
                 slider.bounds(rules.minLeverage(), rules.maxLeverage());
             }
-        }
-
-        private String leverageLine() {
-            return StatCollector.translateToLocalFormatted("gui.nhkantan.trading.leverage_value", leverage);
         }
 
         private long marginCents() {

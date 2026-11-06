@@ -1,5 +1,7 @@
 package com.yuelengm.nhkantan.gui;
 
+import static com.yuelengm.nhkantan.gui.util.Widgets.*;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -66,13 +68,9 @@ public class WalletGui implements IGuiHolder<GuiData> {
     /** Sync key of the balance value, shared by every GUI showing the wallet balance. */
     public static final String BALANCE_SYNC_KEY = "wallet_balance";
 
-    private static final int PADDING = 7;
-    private static final int GAP = 3;
     private static final int TITLE_GAP = 1;
-    private static final int COLUMN_GAP = 8;
     private static final int LEFT_WIDTH = 162;
     private static final int RIGHT_WIDTH = 150;
-    private static final int WIDTH = PADDING * 2 + LEFT_WIDTH + COLUMN_GAP + RIGHT_WIDTH;
     private static final int SLOT_SIZE = 18;
     private static final int DEPOSIT_SLOTS = 6;
     private static final String DEPOSIT_GROUP = "nhkantan_deposit";
@@ -81,7 +79,7 @@ public class WalletGui implements IGuiHolder<GuiData> {
     /** Item icon area; the widget insets the item by 1 px on each side, so 18 shows a full 16 px icon. */
     private static final int ITEM_SIZE = 18;
     private static final int STEP_BUTTON_WIDTH = 11;
-    private static final int STEP_BUTTON_HEIGHT = Widgets.LINE_HEIGHT + 2;
+    private static final int STEP_BUTTON_HEIGHT = LINE_HEIGHT + 2;
     private static final int ACTION_BUTTON_WIDTH = 32;
     /** Upper bound of the quantity field, in base units; the server further limits it to what fits. */
     private static final int MAX_QUANTITY = 999_999;
@@ -119,13 +117,12 @@ public class WalletGui implements IGuiHolder<GuiData> {
         settings.canInteractWith(ItemMarketTerminal::isHeldBy);
         WalletState state = new WalletState(data.getPlayer(), syncManager);
         return ModularPanel.defaultPanel("nhkantan_wallet")
-            .width(WIDTH)
-            .coverChildrenHeight()
+            .padding(PANEL_PADDING)
+            .coverChildren()
             .child(
                 Flow.row()
-                    .coverChildrenHeight()
-                    .padding(PADDING)
-                    .childPadding(COLUMN_GAP)
+                    .coverChildren()
+                    .childPadding(GAP)
                     .child(leftColumn(state))
                     .child(rightColumn(state)));
     }
@@ -227,12 +224,12 @@ public class WalletGui implements IGuiHolder<GuiData> {
     }
 
     private static Flow rightColumn(WalletState state) {
-        ListWidget<IWidget, ?> list = new ListWidget<>().fullWidth();
+        ListWidget<IWidget, ?> list = new ListWidget<>().coverChildrenWidth();
         state.trackItemList(list);
         return Flow.column()
-            .width(RIGHT_WIDTH)
+            .coverChildrenWidth()
             .fullHeight()
-            .childPadding(1)
+            .childPadding(TITLE_GAP)
             .child(
                 Widgets.text(IKey.dynamic(state::itemListTitle))
                     .fullWidth())
@@ -244,7 +241,7 @@ public class WalletGui implements IGuiHolder<GuiData> {
      * Only withdrawable items can be selected.
      */
     private static ToggleButton exchangeRow(WalletState state, int index, CurrencyItem item) {
-        return new ToggleButton().fullWidth()
+        return new ToggleButton().coverChildrenWidth()
             .height(ITEM_SIZE)
             .value(
                 new BoolValue.Dynamic(
@@ -252,13 +249,16 @@ public class WalletGui implements IGuiHolder<GuiData> {
                     selected -> { if (selected && item.canWithdraw()) state.selection = index; }))
             .child(
                 Flow.row()
-                    .sizeRel(1f)
-                    .padding(2, 0)
+                    .fullWidth()
+                    .coverChildrenWidth()
+                    .padding(ROW_PADDING, 0)
                     .childPadding(ROW_PADDING)
                     .child(
                         Widgets.itemIcon(item.displayStack())
                             .size(ITEM_SIZE))
-                    .child(new TextWidget<>(rates(item)).height(ITEM_SIZE)));
+                    .child(
+                        new TextWidget<>(rates(item)).height(ITEM_SIZE)
+                            .padding(ROW_PADDING, 0)));
     }
 
     /** The section title alone, or followed by the amount when it is not zero, e.g. {@code Deposit 6,000 NHC}. */
@@ -353,10 +353,9 @@ public class WalletGui implements IGuiHolder<GuiData> {
             list.removeAll();
             List<CurrencyItem> items = debt ? ExchangeItems.debtItems() : ExchangeItems.currencyItems();
             if (items.isEmpty()) {
-                list.child(
-                    Widgets.text(
-                        IKey.lang(debt ? "gui.nhkantan.wallet.no_debt_items" : "gui.nhkantan.wallet.no_currency_items"),
-                        RIGHT_WIDTH - SCROLLBAR_SPACE));
+                IKey key = IKey
+                    .lang(debt ? "gui.nhkantan.wallet.no_debt_items" : "gui.nhkantan.wallet.no_currency_items");
+                list.child(Widgets.text(key));
                 return;
             }
             for (int i = 0; i < items.size(); i++) {

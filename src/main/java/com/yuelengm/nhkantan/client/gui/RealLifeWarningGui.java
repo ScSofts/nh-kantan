@@ -1,5 +1,7 @@
 package com.yuelengm.nhkantan.client.gui;
 
+import static com.yuelengm.nhkantan.gui.util.Widgets.*;
+
 import net.minecraft.client.Minecraft;
 
 import org.jetbrains.annotations.NotNull;
@@ -29,9 +31,6 @@ import cpw.mods.fml.relauncher.SideOnly;
 @SideOnly(Side.CLIENT)
 public class RealLifeWarningGui extends CustomModularScreen {
 
-    private static final int PADDING = 10;
-    private static final int GAP = 5;
-
     private final Callback callback;
 
     private CheckboxWidget dontShowAgain;
@@ -50,11 +49,11 @@ public class RealLifeWarningGui extends CustomModularScreen {
     public ModularPanel buildUI(ModularGuiContext context) {
         dontShowAgain = new CheckboxWidget(IKey.lang("gui.nhkantan.real_life_warning.dont_show_again"));
         return ModularPanel.defaultPanel("nhkantan_real_life_warning")
+            .padding(PANEL_PADDING)
             .coverChildren()
             .child(
                 Flow.column()
                     .coverChildren()
-                    .padding(PADDING)
                     .childPadding(GAP)
                     .crossAxisAlignment(Alignment.CrossAxis.START)
                     .child(
@@ -64,8 +63,7 @@ public class RealLifeWarningGui extends CustomModularScreen {
                             .child(
                                 Assets.WARNING.asWidget()
                                     .size(16))
-                            .child(
-                                Widgets.text(IKey.lang("gui.nhkantan.real_life_warning.title"))))
+                            .child(Widgets.text(IKey.lang("gui.nhkantan.real_life_warning.title"))))
                     .child(Widgets.text(IKey.lang("gui.nhkantan.real_life_warning.body")))
                     .child(dontShowAgain.marginTop(10))
                     .child(
