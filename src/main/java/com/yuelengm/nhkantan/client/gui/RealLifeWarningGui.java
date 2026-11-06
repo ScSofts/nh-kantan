@@ -64,7 +64,10 @@ public class RealLifeWarningGui extends CustomModularScreen {
                                 Assets.WARNING.asWidget()
                                     .size(16))
                             .child(Widgets.text(IKey.lang("gui.nhkantan.real_life_warning.title"))))
-                    .child(Widgets.text(IKey.lang("gui.nhkantan.real_life_warning.body")).marginTop(5).marginBottom(10))
+                    .child(
+                        Widgets.text(IKey.lang("gui.nhkantan.real_life_warning.body"))
+                            .marginTop(5)
+                            .marginBottom(10))
                     .child(dontShowAgain)
                     .child(
                         new ButtonWidget<>().fullWidth()
