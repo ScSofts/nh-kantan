@@ -10,6 +10,11 @@ item.nhkantan.market_terminal.name=投资终端
 gui.nhkantan.market_terminal.title=投资终端
 gui.nhkantan.market.no_data=暂无行情数据
 
+gui.nhkantan.real_life_warning.title=须知
+gui.nhkantan.real_life_warning.body=NH kantan 不提供真实交易\n本模组内容均为虚构设定，不适用于现实投资\n§l投资有风险，入市须谨慎§r
+gui.nhkantan.real_life_warning.dont_show_again=不再显示
+gui.nhkantan.real_life_warning.confirm=确定
+
 gui.nhkantan.wallet.button=钱包
 gui.nhkantan.wallet.title=钱包
 gui.nhkantan.wallet.balance=余额：%s
@@ -66,6 +71,10 @@ nhkantan.currency.name=货币名称
 nhkantan.currency.name.tooltip=市场币的显示名称。
 nhkantan.currency.initialbalance=初始余额
 nhkantan.currency.initialbalance.tooltip=新玩家账户创建时的余额。
+nhkantan.client=客户端
+nhkantan.client.tooltip=客户端显示设置。
+nhkantan.client.showlifewarning=显示游戏警告
+nhkantan.client.showlifewarning.tooltip=打开投资终端前显示“这不是现实投资”的警告。
 nhkantan.exchange=兑换
 nhkantan.exchange.tooltip=市场币与物品之间的兑换，以及可用于还债的物品。
 nhkantan.exchange.currencyitems=兑换货币

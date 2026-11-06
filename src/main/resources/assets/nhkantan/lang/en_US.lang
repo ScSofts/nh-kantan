@@ -10,6 +10,11 @@ item.nhkantan.market_terminal.name=Market Terminal
 gui.nhkantan.market_terminal.title=Market Terminal
 gui.nhkantan.market.no_data=No market data
 
+gui.nhkantan.real_life_warning.title=Important Notice
+gui.nhkantan.real_life_warning.body=This stock market is only a game mechanic.\nIt is not real investing and cannot produce real money.\nIt is not financial advice.\nTreat every gain and loss as gameplay only.
+gui.nhkantan.real_life_warning.dont_show_again=Do not show again
+gui.nhkantan.real_life_warning.confirm=Continue
+
 gui.nhkantan.wallet.button=Wallet
 gui.nhkantan.wallet.title=Wallet
 gui.nhkantan.wallet.balance=Balance: %s
@@ -66,6 +71,10 @@ nhkantan.currency.name=Currency Name
 nhkantan.currency.name.tooltip=Display name of the market currency.
 nhkantan.currency.initialbalance=Initial Balance
 nhkantan.currency.initialbalance.tooltip=Balance of a newly created player account.
+nhkantan.client=Client
+nhkantan.client.tooltip=Client-side display settings.
+nhkantan.client.showlifewarning=Show Game Warning
+nhkantan.client.showlifewarning.tooltip=Show the non-real-life warning before opening the market terminal.
 nhkantan.exchange=Exchange
 nhkantan.exchange.tooltip=Exchange between market currency and items, and items accepted to repay debt.
 nhkantan.exchange.currencyitems=Currency Items
