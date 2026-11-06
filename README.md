@@ -3,15 +3,16 @@
 **老实做任务赚技术员币，很枯燥吧**
 
 > [!WARNING]
-> 股市有风险 投资需谨慎 <br>
-> 游戏里的你再幸运也是假的
+> NH kantan 不提供真实交易。 <br>
+> 本模组内容均为虚构设定，不适用于现实投资，也不会为您在现实世界的投资负责。 <br>
+> **投资有风险，入市须谨慎**。
 
 ---
 
 ## 下载
 | GTNH  | Download                                                                                                                 |
 |-------|--------------------------------------------------------------------------------------------------------------------------|
-| 2.9.0 | [![0.1.1](https://img.shields.io/badge/release-v0.1.1-orange)](https://github.com/YueLengM/nh-kantan/releases/tag/0.1.1) |
+| 2.9.0 | [![0.1.2](https://img.shields.io/badge/release-v0.1.2-orange)](https://github.com/YueLengM/nh-kantan/releases/tag/0.1.2) |
 
 ---
 
