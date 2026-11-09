@@ -127,6 +127,12 @@ public final class OptionMarket {
     }
 
     private final MarginLedger ledger;
+    private com.yuelengm.nhkantan.market.order.MarketNotices notices;
+
+    public void notifications(com.yuelengm.nhkantan.market.order.MarketNotices outbox) {
+        notices = outbox;
+    }
+
     private final Map<String, Contract> contracts = new LinkedHashMap<>();
     private final Map<String, Quote> quotes = new HashMap<>();
     private final LinkedHashMap<Long, Quote> validQuotes = new LinkedHashMap<>();
@@ -266,11 +272,18 @@ public final class OptionMarket {
         settlementPrices.put(id, frozenExpiryPrice);
         for (Holding holding : holdings) {
             if (!holding.contract.equals(id) || holding.settled) continue;
-            finishExit(
-                holding,
-                holding.remainingQuantity(),
-                intrinsicCents(contract, frozenExpiryPrice, holding.remainingQuantity()),
-                0);
+            long quantity = holding.remainingQuantity();
+            long payout = intrinsicCents(contract, frozenExpiryPrice, quantity);
+            finishExit(holding, quantity, payout, 0);
+            if (notices != null) notices.record(
+                holding.owner,
+                com.yuelengm.nhkantan.market.order.MarketNotices.Kind.OPTION_EXPIRED,
+                contract.underlying,
+                gameTick,
+                quantity,
+                0,
+                payout,
+                contract.expiryTick);
         }
         quotes.remove(id);
     }

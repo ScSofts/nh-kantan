@@ -85,6 +85,12 @@ public class CommonProxy {
         TradingService.stop();
     }
 
+    public void receiveMarketNotices(java.util.UUID generation, int tickValueCents,
+        java.util.List<com.yuelengm.nhkantan.market.order.MarketNotices.Notice> notices) {}
+
+    public void trackExchangeView(com.cleanroommc.modularui.screen.ModularPanel panel,
+        java.util.function.IntSupplier page, Supplier<String> instrument, java.util.function.IntSupplier expiryDay) {}
+
     /**
      * Creates the K-line chart widget used by market GUIs. The chart draws with client-only classes, so the common
      * proxy returns an empty placeholder and only the client proxy creates the real widget.

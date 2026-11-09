@@ -17,10 +17,18 @@ public class ModNetwork {
     private static final int UPDATE_ID = 1;
     private static final int EXCHANGE_ID = 2;
     private static final int OPEN_EXCHANGE_ID = 3;
+    private static final int NOTICE_ID = 4;
+    private static final int NOTICE_ACK_ID = 5;
 
     private ModNetwork() {}
 
     public static void register() {
+        CHANNEL.registerMessage(MarketNoticeMessage.Handler.class, MarketNoticeMessage.class, NOTICE_ID, Side.CLIENT);
+        CHANNEL.registerMessage(
+            MarketNoticeAckMessage.Handler.class,
+            MarketNoticeAckMessage.class,
+            NOTICE_ACK_ID,
+            Side.SERVER);
         CHANNEL.registerMessage(
             OpenExchangeMessage.Handler.class,
             OpenExchangeMessage.class,

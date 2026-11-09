@@ -22,6 +22,21 @@ public class ClientProxy extends CommonProxy {
         FMLCommonHandler.instance()
             .bus()
             .register(new ClientMarketEventHandler());
+        FMLCommonHandler.instance()
+            .bus()
+            .register(com.yuelengm.nhkantan.client.MarketNotifications.INSTANCE);
+    }
+
+    @Override
+    public void receiveMarketNotices(java.util.UUID generation, int tickValueCents,
+        java.util.List<com.yuelengm.nhkantan.market.order.MarketNotices.Notice> notices) {
+        com.yuelengm.nhkantan.client.MarketNotifications.INSTANCE.receive(generation, tickValueCents, notices);
+    }
+
+    @Override
+    public void trackExchangeView(com.cleanroommc.modularui.screen.ModularPanel panel,
+        java.util.function.IntSupplier page, Supplier<String> instrument, java.util.function.IntSupplier expiryDay) {
+        com.yuelengm.nhkantan.client.MarketNotifications.INSTANCE.track(panel, page, instrument, expiryDay);
     }
 
     @Override

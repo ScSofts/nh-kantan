@@ -197,6 +197,11 @@ public final class SimulatedInstrument {
     private long marketTick;
     private final Map<UUID, Protection> protections = new LinkedHashMap<>();
     private boolean checkingProtections;
+    private MarketNotices notices;
+
+    public void notifications(MarketNotices outbox) {
+        notices = outbox;
+    }
 
     public static final class Protection {
 
@@ -207,6 +212,7 @@ public final class SimulatedInstrument {
         private final long initialPosition;
         private long takeOrder;
         private boolean triggered;
+        private boolean takeNotified;
 
         private Protection(long stopPrice, long takePrice, long quantity, long held) {
             this.stopPrice = stopPrice;
@@ -278,6 +284,12 @@ public final class SimulatedInstrument {
                 true,
                 gameTick);
             protection.takeOrder = take.order.id;
+            // A marketable take-profit may fill before the order ID is assigned to its protection.
+            if (!take.fills.isEmpty()) {
+                long filled = 0;
+                for (OrderBook.Fill fill : take.fills) filled += fill.quantity;
+                notifyTake(owner, protection, filled, take.fills.get(take.fills.size() - 1).price, gameTick);
+            }
         }
         checkProtections(gameTick);
     }
@@ -300,6 +312,15 @@ public final class SimulatedInstrument {
                 boolean stopped = lastPrice > 0 && protection.stopPrice > 0
                     && (position > 0 ? lastPrice <= protection.stopPrice : lastPrice >= protection.stopPrice);
                 if (!protection.triggered && !stopped) continue;
+                if (!protection.triggered && notices != null) notices.record(
+                    owner,
+                    MarketNotices.Kind.STOP_TRIGGERED,
+                    id,
+                    gameTick,
+                    Math.min(Math.abs(position), remaining),
+                    lastPrice,
+                    0,
+                    0);
                 protection.triggered = true;
                 if (protection.takeOrder > 0) book.cancel(owner, protection.takeOrder);
                 submit(
@@ -416,9 +437,20 @@ public final class SimulatedInstrument {
             lastPrice = fill.price;
             volume = Math.addExact(volume, fill.quantity);
             flow = Math.max(-1, Math.min(1, flow * 0.95 + (side == OrderBook.Side.BUY ? 1 : -1) * 0.05));
+            for (Map.Entry<UUID, Protection> entry : protections.entrySet()) {
+                Protection protection = entry.getValue();
+                if (protection.takeOrder == fill.buyerOrder || protection.takeOrder == fill.sellerOrder)
+                    notifyTake(entry.getKey(), protection, fill.quantity, fill.price, gameTick);
+            }
         }
         checkProtections(gameTick);
         return result;
+    }
+
+    private void notifyTake(UUID owner, Protection protection, long quantity, long price, long gameTick) {
+        if (protection.takeNotified) return;
+        protection.takeNotified = true;
+        if (notices != null) notices.record(owner, MarketNotices.Kind.TAKE_FILLED, id, gameTick, quantity, price, 0, 0);
     }
 
     public boolean cancel(UUID owner, long id) {

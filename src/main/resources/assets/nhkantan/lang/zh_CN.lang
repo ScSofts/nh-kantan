@@ -161,3 +161,13 @@ gui.nhkantan.exchange.close_option_hint=按做市商回购价平仓（保留时�
 gui.nhkantan.exchange.buyback_quote=做市商回购价：%s（持仓栏可部分平仓）
 
 message.nhkantan.market_unavailable=市场因配置或存档不兼容而暂停，世界仍可正常使用。请查看日志中的 Market startup disabled，修正配置后重进世界；不要删除账本。
+
+notification.nhkantan.stop_triggered.title=止损已触发
+notification.nhkantan.stop_triggered.body=%s · 保护 %s 张
+notification.nhkantan.stop_triggered.detail=触发价 %s NHC · 市价减仓
+notification.nhkantan.take_filled.title=止盈开始成交
+notification.nhkantan.take_filled.body=%s · 本次成交 %s 张
+notification.nhkantan.take_filled.detail=成交价 %s NHC
+notification.nhkantan.option_expired.title=期权已到期结算
+notification.nhkantan.option_expired.body=%s · 到期 %s 份
+notification.nhkantan.option_expired.detail=结算到账 %s

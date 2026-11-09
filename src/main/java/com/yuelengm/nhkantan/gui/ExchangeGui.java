@@ -105,7 +105,7 @@ public final class ExchangeGui implements IGuiHolder<GuiData> {
                     .color(0xFF91B3D6)
                     .fullWidth());
         sync.onClientTick(() -> state.refresh(content));
-        return ModularPanel.defaultPanel("nhkantan_exchange")
+        ModularPanel panel = ModularPanel.defaultPanel("nhkantan_exchange")
             .sizeRel(0.95F, 0.9F)
             .padding(7)
             .background(
@@ -113,6 +113,9 @@ public final class ExchangeGui implements IGuiHolder<GuiData> {
                 new Rectangle().color(0xFF3E638A)
                     .hollow(1))
             .child(layout);
+        if (data.getPlayer().worldObj.isRemote)
+            NHKantan.proxy.trackExchangeView(panel, () -> state.page, () -> state.selected, () -> state.expiryDay);
+        return panel;
     }
 
     private static ButtonWidget<?> button(String key, Runnable action) {

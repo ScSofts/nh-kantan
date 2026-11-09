@@ -26,9 +26,11 @@ public final class ExchangeRuntime implements AutoCloseable {
         public final Map<String, java.util.List<OrderBook.Order>> orders;
         public final Map<String, SimulatedInstrument.Protection> protections;
         public final java.util.Set<String> closing;
+        public final java.util.List<MarketNotices.Notice> notifications;
 
         private PrivateSnapshot(ExchangeRuntime runtime, UUID owner) {
             generation = runtime.generation;
+            notifications = runtime.notices.pending(owner);
             nextRequest = runtime.requests.nextSequence(owner);
             account = runtime.ledger.account(owner);
             contracts = runtime.options.contracts();
@@ -93,10 +95,12 @@ public final class ExchangeRuntime implements AutoCloseable {
         private Map<String, String> instruments;
         private Map<UUID, Long> requests;
         private String options;
+        private String notifications;
         private Map<String, Map<UUID, Integer>> closing;
     }
 
     private final MarketWorker worker;
+    private MarketNotices notices = new MarketNotices();
     private final UUID generation = UUID.randomUUID();
 
     private static final class Reply {
@@ -167,6 +171,7 @@ public final class ExchangeRuntime implements AutoCloseable {
                         .equals(definitions.keySet())) {
                     throw new IllegalArgumentException("Unsupported exchange save or changed instrument set");
                 }
+                notices = MarketNotices.restore(saved.notifications);
                 ledger = MarginLedger.restore(saved.ledger);
                 for (Map.Entry<String, String> entry : saved.instruments.entrySet()) {
                     SimulatedInstrument restored = SimulatedInstrument.restore(entry.getValue(), ledger, seed);
@@ -188,6 +193,8 @@ public final class ExchangeRuntime implements AutoCloseable {
                     }
                 restoredTick = saved.gameTick;
             }
+            for (SimulatedInstrument instrument : instruments.values()) instrument.notifications(notices);
+            options.notifications(notices);
             worker.clock(false, restoredTick);
             return null;
         });
@@ -566,6 +573,15 @@ public final class ExchangeRuntime implements AutoCloseable {
         });
     }
 
+    public CompletableFuture<Void> acknowledgeNotices(UUID epoch, UUID owner, java.util.List<Long> ids) {
+        java.util.List<Long> copy = new java.util.ArrayList<>(ids);
+        return worker.submit(() -> {
+            requireReady();
+            if (generation.equals(epoch)) notices.acknowledge(owner, copy);
+            return null;
+        });
+    }
+
     public CompletableFuture<PrivateSnapshot> privateSnapshot(UUID authenticatedOwner) {
         return worker.submit(() -> {
             requireReady();
@@ -620,6 +636,7 @@ public final class ExchangeRuntime implements AutoCloseable {
             saved.ledger = ledger.checkpoint();
             saved.requests = requests.checkpoint();
             saved.options = options.checkpoint();
+            saved.notifications = notices.checkpoint();
             saved.closing = closing;
             saved.instruments = new LinkedHashMap<>();
             for (Map.Entry<String, SimulatedInstrument> entry : instruments.entrySet()) {

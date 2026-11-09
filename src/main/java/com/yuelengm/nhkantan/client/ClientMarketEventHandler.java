@@ -15,5 +15,6 @@ public class ClientMarketEventHandler {
     public void onDisconnect(FMLNetworkEvent.ClientDisconnectionFromServerEvent event) {
         ClientMarketData.INSTANCE.clear();
         ClientExchangeData.clear();
+        MarketNotifications.INSTANCE.disconnect();
     }
 }

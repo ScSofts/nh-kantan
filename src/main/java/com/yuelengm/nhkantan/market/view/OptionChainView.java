@@ -79,6 +79,7 @@ public final class OptionChainView {
         view.add("options", holdings);
         view.add("contracts", chain);
         view.add("quotes", quotes);
+        view.remove("notifications"); // Notifications use their own bounded, acknowledged channel.
         return view.toString();
     }
 }

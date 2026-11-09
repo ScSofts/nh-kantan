@@ -55,6 +55,8 @@ public final class RealisticService {
     private final Map<UUID, String> privateViews = new HashMap<>();
     private final Map<UUID, CompletableFuture<ExchangeRuntime.PrivateSnapshot>> privatePending = new HashMap<>();
     private CompletableFuture<Map<String, SimulatedInstrument.Snapshot>> publicPending;
+    private final Map<UUID, Long> noticeResendTick = new HashMap<>();
+    private final Map<UUID, Long> lastNoticeSent = new HashMap<>();
     private long gameTick;
     private long revision;
     private boolean accepting = true;
@@ -267,7 +269,13 @@ public final class RealisticService {
                 privatePending).entrySet()) {
                 if (!entry.getValue()
                     .isDone()) continue;
-                privateViews.put(entry.getKey(), new Gson().toJson(InventoryTransfers.await(entry.getValue())));
+                ExchangeRuntime.PrivateSnapshot view = InventoryTransfers.await(entry.getValue());
+                privateViews.put(entry.getKey(), new Gson().toJson(view));
+                for (Object value : server.getConfigurationManager().playerEntityList) {
+                    EntityPlayerMP player = (EntityPlayerMP) value;
+                    if (player.getUniqueID()
+                        .equals(entry.getKey())) sendNotices(player, view);
+                }
                 privatePending.remove(entry.getKey());
             }
             if (gameTick % 4 == 0) {
@@ -294,9 +302,31 @@ public final class RealisticService {
         transfers.reconcile(player);
         ModNetwork.CHANNEL
             .sendTo(new ExchangeFrameMessage(frame(InventoryTransfers.await(runtime.publicSnapshot()))), player);
-        privateViews.put(
-            player.getUniqueID(),
-            new Gson().toJson(InventoryTransfers.await(runtime.privateSnapshot(player.getUniqueID()))));
+        ExchangeRuntime.PrivateSnapshot view = InventoryTransfers.await(runtime.privateSnapshot(player.getUniqueID()));
+        privateViews.put(player.getUniqueID(), new Gson().toJson(view));
+        noticeResendTick.remove(player.getUniqueID());
+        lastNoticeSent.remove(player.getUniqueID());
+        sendNotices(player, view);
+    }
+
+    private void sendNotices(EntityPlayerMP player, ExchangeRuntime.PrivateSnapshot view) {
+        if (view.notifications.isEmpty()) return;
+        UUID owner = player.getUniqueID();
+        long newest = view.notifications.get(view.notifications.size() - 1).id;
+        if (newest <= lastNoticeSent.getOrDefault(owner, 0L) && gameTick < noticeResendTick.getOrDefault(owner, 0L))
+            return;
+        ModNetwork.CHANNEL.sendTo(
+            new com.yuelengm.nhkantan.network.MarketNoticeMessage(
+                runtime.generation(),
+                RealisticConfig.tickValueCents,
+                view.notifications),
+            player);
+        lastNoticeSent.put(owner, newest);
+        noticeResendTick.put(owner, gameTick + 100);
+    }
+
+    public void acknowledgeNotices(UUID generation, UUID authenticatedOwner, java.util.List<Long> ids) {
+        runtime.acknowledgeNotices(generation, authenticatedOwner, ids);
     }
 
     private ClientExchangeData.Frame frame(Map<String, SimulatedInstrument.Snapshot> instruments) {
