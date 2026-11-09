@@ -87,10 +87,19 @@ public final class RealisticService {
             settings.initialPrice = ticks(stock.initialPrice(), RoundingMode.HALF_UP);
             settings.botCashCents = Math.multiplyExact(RealisticConfig.botInitialCash, 100L);
             settings.depth = RealisticConfig.depth;
-            settings.baseOrderSize = RealisticConfig.botOrderSize;
+            settings.institutionalCapitalCents = Math
+                .multiplyExact(settings.botCashCents, RealisticConfig.institutionalCapitalMultiplier);
+            settings.institutionalPositionLimit = RealisticConfig.institutionalPositionLimit;
+            settings.fairWindowTicks = Math.multiplyExact(RealisticConfig.fairAverageSeconds, 20L);
+            settings.baseOrderSize = Math
+                .multiplyExact(RealisticConfig.botOrderSize, RealisticConfig.institutionalOrderMultiplier);
             settings.volatility = RealisticConfig.fairVolatilityTicks * RealisticConfig.volatilityMultiplier;
             settings.impact = RealisticConfig.flowImpact;
             settings.jitter = RealisticConfig.intervalJitter;
+            settings.regimeMinSteps = Math.multiplyExact(RealisticConfig.regimeMinSeconds, 10);
+            settings.regimeMaxSteps = Math.multiplyExact(RealisticConfig.regimeMaxSeconds, 10);
+            settings.trendMoveBps = RealisticConfig.trendMoveBps;
+            settings.breakoutMoveBps = RealisticConfig.breakoutMoveBps;
             settings.historyCapacity = MarketConfig.visibleCandles;
             settings.candleTicks = MarketConfig.updateIntervalTicks;
             specs.put(

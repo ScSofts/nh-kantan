@@ -53,6 +53,25 @@ public class RealisticConfig {
     @Config.RangeInt(min = 1, max = 100000000)
     public static int botInitialCash;
 
+    @Config.Comment("Institution capital is botInitialCash times this factor. Increases are granted once; losses are not reset.")
+    @Config.DefaultInt(100)
+    @Config.RangeInt(min = 1, max = 1000)
+    public static int institutionalCapitalMultiplier;
+
+    @Config.Comment("Institution order size is botOrderSize times this factor, including existing config files.")
+    @Config.DefaultInt(100)
+    @Config.RangeInt(min = 1, max = 100)
+    public static int institutionalOrderMultiplier;
+
+    @Config.DefaultInt(100000)
+    @Config.RangeInt(min = 1000, max = 1000000)
+    public static int institutionalPositionLimit;
+
+    @Config.Comment("Rolling executed-price VWAP window in active game seconds, evaluated over candle buckets.")
+    @Config.DefaultInt(60)
+    @Config.RangeInt(min = 1, max = 3600)
+    public static int fairAverageSeconds;
+
     @Config.Comment("Profiles are market maker, trend, mean reversion, noise, whale, in that order.")
     @Config.DefaultIntList({ 3, 4, 4, 8, 1 })
     public static int[] botCounts;
@@ -75,6 +94,25 @@ public class RealisticConfig {
     @Config.DefaultDouble(12)
     @Config.RangeDouble(min = 0, max = 100)
     public static double volatilityMultiplier;
+
+    @Config.Comment("Persistent market phase duration in seconds; phase changes use active market time only.")
+    @Config.DefaultInt(30)
+    @Config.RangeInt(min = 2, max = 3600)
+    public static int regimeMinSeconds;
+
+    @Config.DefaultInt(75)
+    @Config.RangeInt(min = 2, max = 3600)
+    public static int regimeMaxSeconds;
+
+    @Config.Comment("Typical directional move per trend phase, in basis points of the current price.")
+    @Config.DefaultInt(500)
+    @Config.RangeInt(min = 0, max = 5000)
+    public static int trendMoveBps;
+
+    @Config.Comment("Typical breakout displacement in basis points; reprices through real orders, not synthetic fills.")
+    @Config.DefaultInt(800)
+    @Config.RangeInt(min = 0, max = 10000)
+    public static int breakoutMoveBps;
 
     @Config.DefaultDouble(0.02)
     @Config.RangeDouble(min = 0, max = 1)

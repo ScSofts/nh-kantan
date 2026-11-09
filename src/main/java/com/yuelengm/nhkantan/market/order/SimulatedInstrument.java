@@ -28,11 +28,18 @@ public final class SimulatedInstrument {
         public long upperPrice = 100000;
         public long initialPrice = 10000;
         public long botCashCents = 100000000;
+        public long institutionalCapitalCents = 10000000000L;
+        public long institutionalPositionLimit = 100000;
+        public long fairWindowTicks = 1200;
         public int depth = 8;
-        public long baseOrderSize = 3;
+        public long baseOrderSize = 300;
         public double volatility = 6;
         public double impact = 0.02;
         public double jitter = 0.4;
+        public int regimeMinSteps = 300;
+        public int regimeMaxSteps = 750;
+        public int trendMoveBps = 500;
+        public int breakoutMoveBps = 800;
         public int historyCapacity = 100;
         public long candleTicks = 40;
 
@@ -41,17 +48,29 @@ public final class SimulatedInstrument {
                 || initialPrice < lowerPrice
                 || initialPrice > upperPrice
                 || botCashCents < 1
+                || institutionalCapitalCents < 1
+                || institutionalPositionLimit < 1
+                || institutionalPositionLimit > 1000000
+                || fairWindowTicks < 20
+                || fairWindowTicks > 72000
                 || depth < 1
                 || depth > 100
                 || baseOrderSize < 1
-                || baseOrderSize > 10000
+                || baseOrderSize > 1000000
                 || !Double.isFinite(volatility)
                 || volatility < 0
                 || !Double.isFinite(impact)
                 || impact < 0
                 || !Double.isFinite(jitter)
                 || jitter < 0
-                || jitter > 1) {
+                || jitter > 1
+                || regimeMinSteps < 20
+                || regimeMaxSteps < regimeMinSteps
+                || regimeMaxSteps > 36000
+                || trendMoveBps < 0
+                || trendMoveBps > 5000
+                || breakoutMoveBps < 0
+                || breakoutMoveBps > 10000) {
                 throw new IllegalArgumentException("Invalid instrument simulation settings");
             }
             Settings copy = new Settings();
@@ -59,11 +78,18 @@ public final class SimulatedInstrument {
             copy.upperPrice = upperPrice;
             copy.initialPrice = initialPrice;
             copy.botCashCents = botCashCents;
+            copy.institutionalCapitalCents = institutionalCapitalCents;
+            copy.institutionalPositionLimit = institutionalPositionLimit;
+            copy.fairWindowTicks = fairWindowTicks;
             copy.depth = depth;
             copy.baseOrderSize = baseOrderSize;
             copy.volatility = volatility;
             copy.impact = impact;
             copy.jitter = jitter;
+            copy.regimeMinSteps = regimeMinSteps;
+            copy.regimeMaxSteps = regimeMaxSteps;
+            copy.trendMoveBps = trendMoveBps;
+            copy.breakoutMoveBps = breakoutMoveBps;
             copy.historyCapacity = historyCapacity;
             copy.candleTicks = candleTicks;
             return copy;
@@ -131,12 +157,12 @@ public final class SimulatedInstrument {
     private final MarginLedger ledger;
     private final OrderBook book;
     private final TradeHistory history;
-    private final Random fairRandom;
+    private MarketDynamics dynamics;
     private double fairPrice;
-    private double drift;
     private double flow;
     private long lastPrice;
     private long volume;
+    private long marketTick;
     private final Map<UUID, Protection> protections = new LinkedHashMap<>();
     private boolean checkingProtections;
 
@@ -169,11 +195,18 @@ public final class SimulatedInstrument {
     /** Reapply restart-bound behavior without altering saved contracts, balances or price bounds. */
     public void configureBehavior(Settings configured) {
         Settings checked = configured.copy();
+        settings.institutionalCapitalCents = checked.institutionalCapitalCents;
+        settings.institutionalPositionLimit = checked.institutionalPositionLimit;
+        settings.fairWindowTicks = checked.fairWindowTicks;
         settings.volatility = checked.volatility;
         settings.impact = checked.impact;
         settings.jitter = checked.jitter;
         settings.depth = checked.depth;
         settings.baseOrderSize = checked.baseOrderSize;
+        settings.regimeMinSteps = checked.regimeMinSteps;
+        settings.regimeMaxSteps = checked.regimeMaxSteps;
+        settings.trendMoveBps = checked.trendMoveBps;
+        settings.breakoutMoveBps = checked.breakoutMoveBps;
     }
 
     public void clearProtection(UUID owner) {
@@ -252,7 +285,8 @@ public final class SimulatedInstrument {
         private String book;
         private List<TradeHistory.Bar> candles;
         private double fair;
-        private double drift;
+        private double drift; // Kept for version-one save validation.
+        private MarketDynamics dynamics;
         private double flow;
         private long lastPrice;
         private long volume;
@@ -266,8 +300,8 @@ public final class SimulatedInstrument {
         this.ledger = ledger;
         this.book = new OrderBook(settlement);
         this.history = new TradeHistory(settings.historyCapacity, settings.candleTicks);
-        fairRandom = new Random(seed ^ id.hashCode());
         fairPrice = settings.initialPrice;
+        dynamics = new MarketDynamics(fairPrice, seed ^ id.hashCode());
     }
 
     private SimulatedInstrument(Checkpoint saved, MarginLedger ledger, long seed) {
@@ -276,9 +310,9 @@ public final class SimulatedInstrument {
         this.ledger = ledger;
         book = OrderBook.restore(saved.book, ledger.instrument(id));
         history = TradeHistory.restore(settings.historyCapacity, settings.candleTicks, saved.candles);
-        fairRandom = new Random(seed ^ id.hashCode());
         fairPrice = saved.fair;
-        drift = saved.drift;
+        dynamics = saved.dynamics == null ? new MarketDynamics(fairPrice, seed ^ id.hashCode()) : saved.dynamics;
+        dynamics.validate(settings.lowerPrice, settings.upperPrice);
         flow = saved.flow;
         lastPrice = saved.lastPrice;
         volume = saved.volume;
@@ -304,7 +338,7 @@ public final class SimulatedInstrument {
         saved.book = book.checkpoint();
         saved.candles = history.snapshot();
         saved.fair = fairPrice;
-        saved.drift = drift;
+        saved.dynamics = dynamics;
         saved.flow = flow;
         saved.lastPrice = lastPrice;
         saved.volume = volume;
@@ -335,6 +369,7 @@ public final class SimulatedInstrument {
         if (price < settings.lowerPrice || price > settings.upperPrice) {
             throw new IllegalArgumentException("Order price outside instrument bounds");
         }
+        marketTick = Math.max(marketTick, gameTick);
         OrderBook.Result result = book.submit(owner, side, price, quantity, market, reduceOnly);
         for (OrderBook.Fill fill : result.fills) {
             history.fill(gameTick, fill.price, fill.quantity);
@@ -351,18 +386,23 @@ public final class SimulatedInstrument {
     }
 
     public Snapshot snapshot(long gameTick) {
+        marketTick = Math.max(marketTick, gameTick);
         history.advance(gameTick);
         return new Snapshot(this);
     }
 
     /** Hidden fair price only informs bots; it is never returned by a public snapshot. */
     public void updateFairPrice() {
-        drift = Math.max(-0.15, Math.min(0.15, drift * 0.98 + fairRandom.nextGaussian() * 0.01));
-        fairPrice = Math.max(
-            settings.lowerPrice,
-            Math.min(
-                settings.upperPrice,
-                fairPrice + drift + settings.volatility * fairRandom.nextGaussian() + settings.impact * flow));
+        updateFairPrice(marketTick);
+    }
+
+    public void updateFairPrice(long gameTick) {
+        marketTick = Math.max(marketTick, gameTick);
+        dynamics.step(settings, flow); // Persistent institutional demand, not the quoted fair-value anchor.
+        double average = history.averagePrice(marketTick, settings.fairWindowTicks);
+        if (average <= 0) average = lastPrice > 0 ? lastPrice : fairPrice;
+        fairPrice = Math
+            .max(settings.lowerPrice, Math.min(settings.upperPrice, dynamics.noisyFair(average, settings.volatility)));
         flow *= 0.95;
     }
 
@@ -371,7 +411,11 @@ public final class SimulatedInstrument {
         double probability) {
         UUID owner = UUID
             .nameUUIDFromBytes(("nhkantan:" + id + ":" + strategy + ":" + index).getBytes(StandardCharsets.UTF_8));
-        if (!ledger.hasAccount(owner)) ledger.importAccount(owner, settings.botCashCents);
+        ledger.provisionInstitution(
+            owner,
+            settings.institutionalCapitalCents,
+            settings.botCashCents,
+            settings.institutionalPositionLimit);
         Random random = new Random(seed ^ owner.getLeastSignificantBits());
         worker.schedule(
             seed ^ owner.getMostSignificantBits(),
@@ -381,29 +425,48 @@ public final class SimulatedInstrument {
             () -> act(owner, strategy, random, worker.gameTick()));
     }
 
-    private void act(UUID owner, Strategy strategy, Random random, long gameTick) {
+    void act(UUID owner, Strategy strategy, Random random, long gameTick) {
         if (strategy == Strategy.MARKET_MAKER) {
             maintainQuotes(owner, random, gameTick);
             return;
         }
+        // Short-lived noise quotes cannot pin the market to yesterday's price indefinitely.
+        if (strategy == Strategy.NOISE) for (OrderBook.Order order : orders(owner)) book.cancel(owner, order.id);
         List<TradeHistory.Bar> bars = history.snapshot();
         long reference = lastPrice > 0 ? lastPrice : Math.round(fairPrice);
         double signal;
         if (strategy == Strategy.TREND) {
             if (bars.size() < 2) return;
             int lookback = Math.min(bars.size() - 1, 3 + random.nextInt(10));
-            signal = reference - bars.get(bars.size() - 1 - lookback).close;
+            signal = reference - bars.get(bars.size() - 1 - lookback).close
+                + dynamics.pressure() * Math.max(settings.volatility * 8, reference * 0.002);
         } else if (strategy == Strategy.MEAN_REVERSION) {
             if (bars.isEmpty()) return;
             int window = Math.min(bars.size(), 5 + random.nextInt(15));
             double sum = 0;
             for (int i = bars.size() - window; i < bars.size(); i++) sum += bars.get(i).close;
             signal = sum / window - reference;
-        } else signal = random.nextBoolean() ? 1 : -1;
+        } else signal = random.nextDouble()
+            < 0.5 + dynamics.pressure() * (dynamics.burst() ? 0.45 : strategy == Strategy.WHALE ? 0.35 : 0.22) ? 1 : -1;
         if (signal == 0) return;
+        long inventory = ledger.position(owner, id).quantity;
+        long softLimit = Math.max(
+            1,
+            ledger.instrument(id)
+                .positionLimit(owner) * 3
+                / 4);
+        // Inventory-constrained participants take profits rather than eventually becoming permanently inactive.
+        if (inventory >= softLimit) signal = -1;
+        else if (inventory <= -softLimit) signal = 1;
         OrderBook.Side side = signal > 0 ? OrderBook.Side.BUY : OrderBook.Side.SELL;
-        long quantity = strategy == Strategy.WHALE ? 30 + random.nextInt(121)
-            : 1 + (long) (random.nextDouble() * settings.baseOrderSize);
+        long quantity = strategy == Strategy.WHALE
+            ? (30 + random.nextInt(121)) * Math.max(1, settings.baseOrderSize / 3)
+            : Math.max(1, settings.baseOrderSize / 3) + (long) (random.nextDouble() * settings.baseOrderSize);
+        if (dynamics.burst()) quantity = Math.multiplyExact(quantity, 3);
+        quantity = Math.min(
+            quantity,
+            ledger.instrument(id)
+                .positionLimit(owner));
         boolean market = strategy != Strategy.NOISE || random.nextBoolean();
         long price = market ? (side == OrderBook.Side.BUY ? settings.upperPrice : settings.lowerPrice)
             : bounded(reference + (side == OrderBook.Side.BUY ? -1 : 1) * (1 + random.nextInt(5)));
@@ -415,16 +478,43 @@ public final class SimulatedInstrument {
         for (OrderBook.Side side : OrderBook.Side.values()) {
             for (OrderBook.Order order : book.orders(side)) if (order.owner.equals(owner)) owned.add(order);
         }
-        Collections.shuffle(owned, random);
-        if (!owned.isEmpty()) book.cancel(owner, owned.get(0).id); // Incremental refresh, never cancel the whole book.
-        if (owned.size() >= settings.depth * 2) return;
+        // Retire a bounded number of stale quotes per independent action, preserving finite standing liquidity.
+        owned
+            .sort((left, right) -> Double.compare(Math.abs(right.price - fairPrice), Math.abs(left.price - fairPrice)));
+        double staleDistance = Math.max(settings.depth * 3D, settings.volatility * 8);
+        int removed = 0;
+        for (OrderBook.Order order : owned) {
+            if (removed >= 2) break;
+            if (Math.abs(order.price - fairPrice) > staleDistance || owned.size() - removed >= settings.depth * 2)
+                if (book.cancel(owner, order.id)) removed++;
+        }
+        if (owned.size() - removed + 2 > settings.depth * 2) {
+            for (OrderBook.Order order : owned) {
+                if (removed >= 2) break;
+                if (book.cancel(owner, order.id)) removed++;
+            }
+        }
         long inventory = ledger.position(owner, id).quantity;
-        double center = fairPrice - inventory * 0.01;
+        double center = fairPrice + dynamics.quotePremium(settings, fairPrice) - inventory * 0.01;
+        center += flow * Math.max(settings.volatility * 3, fairPrice * 0.001);
+        long softLimit = Math.max(
+            1,
+            ledger.instrument(id)
+                .positionLimit(owner) * 3
+                / 4);
         for (OrderBook.Side side : OrderBook.Side.values()) {
-            long distance = 1 + random.nextInt(settings.depth);
-            long price = bounded(Math.round(center) + (side == OrderBook.Side.BUY ? -distance : distance));
-            long quantity = 1 + (long) (random.nextDouble() * settings.baseOrderSize * 3);
-            submit(owner, side, price, quantity, false, false, gameTick);
+            if ((inventory >= softLimit && side == OrderBook.Side.BUY)
+                || (inventory <= -softLimit && side == OrderBook.Side.SELL)) continue;
+            int count = 0;
+            for (OrderBook.Order order : orders(owner)) if (order.side == side) count++;
+            // Rebuild a few missing levels after a large sweep, rather than replenishing one tiny order per action.
+            int replenishments = Math.min(3, Math.max(0, settings.depth - count));
+            for (int level = 0; level < replenishments; level++) {
+                long distance = 1 + random.nextInt(settings.depth) + level;
+                long price = bounded(Math.round(center) + (side == OrderBook.Side.BUY ? -distance : distance));
+                long quantity = settings.baseOrderSize + (long) (random.nextDouble() * settings.baseOrderSize * 2);
+                submit(owner, side, price, quantity, false, false, gameTick);
+            }
         }
     }
 

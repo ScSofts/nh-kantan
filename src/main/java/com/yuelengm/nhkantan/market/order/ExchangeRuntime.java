@@ -448,7 +448,7 @@ public final class ExchangeRuntime implements AutoCloseable {
                     100,
                     0,
                     1,
-                    instrument::updateFairPrice);
+                    () -> instrument.updateFairPrice(worker.gameTick()));
                 for (int type = 0; type < strategies; type++) {
                     for (int i = 0; i < sizes[type]; i++) {
                         instrument.addBot(
