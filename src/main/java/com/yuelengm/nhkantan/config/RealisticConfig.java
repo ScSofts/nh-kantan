@@ -114,6 +114,39 @@ public class RealisticConfig {
     @Config.RangeInt(min = 0, max = 10000)
     public static int breakoutMoveBps;
 
+    @Config.Comment("Per-step follow rate of the medium-term fundamental anchor.")
+    @Config.DefaultDouble(0.001)
+    @Config.RangeDouble(min = 0, max = 1)
+    public static double anchorFollowRate;
+
+    @Config.DefaultDouble(0.22)
+    @Config.RangeDouble(min = 0, max = 1)
+    public static double flowFollowRate;
+
+    @Config.Comment("Maximum temporary order-flow displacement, in basis points; flowImpact scales this cap.")
+    @Config.DefaultDouble(20)
+    @Config.RangeDouble(min = 0, max = 1000)
+    public static double maxFlowImpactBps;
+
+    @Config.Comment("Weight of bounded rolling-VWAP deviation around the fundamental reference, from 0 to 1.")
+    @Config.DefaultDouble(0.15)
+    @Config.RangeDouble(min = 0, max = 1)
+    public static double fairVwapWeight;
+
+    @Config.Comment("Maximum VWAP deviation in multiples of effective tick volatility; prevents feedback ratcheting.")
+    @Config.DefaultDouble(2)
+    @Config.RangeDouble(min = 0, max = 100)
+    public static double vwapDeviationVolMultiplier;
+
+    @Config.DefaultDouble(0.85)
+    @Config.RangeDouble(min = 0, max = 0.999)
+    public static double fairNoiseMemory;
+
+    @Config.DefaultDouble(3)
+    @Config.RangeDouble(min = 0, max = 100)
+    public static double fairNoiseLimitMultiplier;
+
+    @Config.Comment("Fraction of maxFlowImpactBps used for normalized signed aggressive order flow.")
     @Config.DefaultDouble(0.02)
     @Config.RangeDouble(min = 0, max = 1)
     public static double flowImpact;
@@ -142,4 +175,86 @@ public class RealisticConfig {
     @Config.DefaultDouble(0.01)
     @Config.RangeDouble(min = 0, max = 10000)
     public static double optionMinimumMarkup;
+
+    /** Normalize at world start, before creating workers or touching finance files. The cfg itself is preserved. */
+    public static void normalize() {
+        try {
+            for (java.lang.reflect.Field field : RealisticConfig.class.getDeclaredFields()) {
+                if (!java.lang.reflect.Modifier.isStatic(field.getModifiers())) continue;
+                if (field.getType() == int.class) {
+                    Config.RangeInt range = field.getAnnotation(Config.RangeInt.class);
+                    Config.DefaultInt fallback = field.getAnnotation(Config.DefaultInt.class);
+                    if (range != null && fallback != null) {
+                        int value = field.getInt(null);
+                        if (value < range.min() || value > range.max()) {
+                            field.setInt(null, fallback.value());
+                            corrected(field.getName());
+                        }
+                    }
+                } else if (field.getType() == double.class) {
+                    Config.RangeDouble range = field.getAnnotation(Config.RangeDouble.class);
+                    Config.DefaultDouble fallback = field.getAnnotation(Config.DefaultDouble.class);
+                    if (range != null && fallback != null) {
+                        double value = field.getDouble(null);
+                        if (!Double.isFinite(value) || value < range.min() || value > range.max()) {
+                            field.setDouble(null, fallback.value());
+                            corrected(field.getName());
+                        }
+                    }
+                }
+            }
+        } catch (IllegalAccessException e) {
+            throw new IllegalStateException("Unable to normalize realistic configuration", e);
+        }
+        if (regimeMaxSeconds < regimeMinSeconds) {
+            int previousMin = regimeMinSeconds;
+            regimeMinSeconds = regimeMaxSeconds;
+            regimeMaxSeconds = previousMin;
+            corrected("regimeMinSeconds/regimeMaxSeconds (reordered)");
+        }
+        if (maintenanceMarginBps > initialMarginBps) {
+            maintenanceMarginBps = initialMarginBps / 2;
+            corrected("maintenanceMarginBps");
+        }
+        botCounts = profile(botCounts, new int[] { 3, 4, 4, 8, 1 }, 0, 100);
+        botIntervalsMillis = profile(botIntervalsMillis, new int[] { 500, 700, 800, 350, 12000 }, 100, 86400000);
+        double[] defaults = { 0.9, 0.65, 0.6, 0.75, 0.15 };
+        double[] probabilities = new double[5];
+        for (int i = 0; i < 5; i++) {
+            double value = botProbabilities != null && i < botProbabilities.length ? botProbabilities[i] : Double.NaN;
+            probabilities[i] = Double.isFinite(value) && value >= 0 && value <= 1 ? value : defaults[i];
+        }
+        if (!java.util.Arrays.equals(botProbabilities, probabilities)) corrected("botProbabilities");
+        botProbabilities = probabilities;
+    }
+
+    public static int[] botBudget(int instruments) {
+        if (instruments < 1 || instruments > 500)
+            throw new IllegalArgumentException("Expected 1 to 500 enabled instruments");
+        int[] counts = botCounts.clone();
+        int total = 0;
+        for (int count : counts) total += count;
+        int allowed = 500 / instruments;
+        if (total <= allowed) return counts;
+        for (int i = 0; i < counts.length; i++) counts[i] = (int) ((long) counts[i] * allowed / total);
+        if (botCounts[0] > 0 && counts[0] == 0) counts[0] = 1;
+        NHKantan.LOG.warn(
+            "Reduced institution counts to fit the 500-instance market budget: {}",
+            java.util.Arrays.toString(counts));
+        return counts;
+    }
+
+    private static int[] profile(int[] values, int[] defaults, int min, int max) {
+        int[] result = new int[5];
+        for (int i = 0; i < 5; i++) {
+            int value = values != null && i < values.length ? values[i] : -1;
+            result[i] = value >= min && value <= max ? value : defaults[i];
+        }
+        if (!java.util.Arrays.equals(values, result)) corrected("institution profile array");
+        return result;
+    }
+
+    private static void corrected(String name) {
+        NHKantan.LOG.warn("Invalid realistic setting corrected in memory: {}. Original cfg retained.", name);
+    }
 }

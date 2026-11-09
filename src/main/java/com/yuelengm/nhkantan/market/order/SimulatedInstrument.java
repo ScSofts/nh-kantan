@@ -35,6 +35,14 @@ public final class SimulatedInstrument {
         public long baseOrderSize = 300;
         public double volatility = 6;
         public double impact = 0.02;
+        public double anchorFollowRate = 0.001;
+        public double flowFollowRate = 0.22;
+        public double maxFlowImpactBps = 20.0;
+        public double fairVwapWeight = 0.15;
+        public double vwapDeviationVolMultiplier = 2.0;
+        public double fairNoiseMemory = 0.85;
+        public double fairNoiseLimitMultiplier = 3.0;
+
         public double jitter = 0.4;
         public int regimeMinSteps = 300;
         public int regimeMaxSteps = 750;
@@ -64,6 +72,14 @@ public final class SimulatedInstrument {
                 || !Double.isFinite(jitter)
                 || jitter < 0
                 || jitter > 1
+                || !unit(anchorFollowRate)
+                || !unit(flowFollowRate)
+                || !unit(fairVwapWeight)
+                || !unit(fairNoiseMemory)
+                || fairNoiseMemory >= 1
+                || !finiteRange(maxFlowImpactBps, 1000)
+                || !finiteRange(vwapDeviationVolMultiplier, 100)
+                || !finiteRange(fairNoiseLimitMultiplier, 100)
                 || regimeMinSteps < 20
                 || regimeMaxSteps < regimeMinSteps
                 || regimeMaxSteps > 36000
@@ -85,6 +101,14 @@ public final class SimulatedInstrument {
             copy.baseOrderSize = baseOrderSize;
             copy.volatility = volatility;
             copy.impact = impact;
+            copy.anchorFollowRate = anchorFollowRate;
+            copy.flowFollowRate = flowFollowRate;
+            copy.maxFlowImpactBps = maxFlowImpactBps;
+            copy.fairVwapWeight = fairVwapWeight;
+            copy.vwapDeviationVolMultiplier = vwapDeviationVolMultiplier;
+            copy.fairNoiseMemory = fairNoiseMemory;
+            copy.fairNoiseLimitMultiplier = fairNoiseLimitMultiplier;
+
             copy.jitter = jitter;
             copy.regimeMinSteps = regimeMinSteps;
             copy.regimeMaxSteps = regimeMaxSteps;
@@ -94,6 +118,14 @@ public final class SimulatedInstrument {
             copy.candleTicks = candleTicks;
             return copy;
         }
+    }
+
+    private static boolean unit(double value) {
+        return finiteRange(value, 1);
+    }
+
+    private static boolean finiteRange(double value, double max) {
+        return Double.isFinite(value) && value >= 0 && value <= max;
     }
 
     public static final class Snapshot {
@@ -200,6 +232,14 @@ public final class SimulatedInstrument {
         settings.fairWindowTicks = checked.fairWindowTicks;
         settings.volatility = checked.volatility;
         settings.impact = checked.impact;
+        settings.anchorFollowRate = checked.anchorFollowRate;
+        settings.flowFollowRate = checked.flowFollowRate;
+        settings.maxFlowImpactBps = checked.maxFlowImpactBps;
+        settings.fairVwapWeight = checked.fairVwapWeight;
+        settings.vwapDeviationVolMultiplier = checked.vwapDeviationVolMultiplier;
+        settings.fairNoiseMemory = checked.fairNoiseMemory;
+        settings.fairNoiseLimitMultiplier = checked.fairNoiseLimitMultiplier;
+
         settings.jitter = checked.jitter;
         settings.depth = checked.depth;
         settings.baseOrderSize = checked.baseOrderSize;
@@ -401,8 +441,7 @@ public final class SimulatedInstrument {
         dynamics.step(settings, flow); // Persistent institutional demand, not the quoted fair-value anchor.
         double average = history.averagePrice(marketTick, settings.fairWindowTicks);
         if (average <= 0) average = lastPrice > 0 ? lastPrice : fairPrice;
-        fairPrice = Math
-            .max(settings.lowerPrice, Math.min(settings.upperPrice, dynamics.noisyFair(average, settings.volatility)));
+        fairPrice = Math.max(settings.lowerPrice, Math.min(settings.upperPrice, dynamics.noisyFair(average, settings)));
         flow *= 0.95;
     }
 

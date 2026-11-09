@@ -34,6 +34,9 @@ import com.yuelengm.nhkantan.network.ModNetwork;
 public final class RealisticService {
 
     private static volatile RealisticService instance;
+    private static volatile Throwable startupFailure;
+    private static volatile ClientExchangeData.Frame unavailableFrame;
+    private static final ArrayBlockingQueue<UUID> unavailableRequests = new ArrayBlockingQueue<>(128);
 
     private static final class Saved {
 
@@ -63,6 +66,15 @@ public final class RealisticService {
 
     private RealisticService(MinecraftServer server) throws IOException {
         this.server = server;
+        RealisticConfig.normalize();
+        NHKantan.LOG.info(
+            "Effective realistic settings: phase {}..{}s, VWAP weight {}, institution capital/order multipliers {}/{}, position limit {}",
+            RealisticConfig.regimeMinSeconds,
+            RealisticConfig.regimeMaxSeconds,
+            RealisticConfig.fairVwapWeight,
+            RealisticConfig.institutionalCapitalMultiplier,
+            RealisticConfig.institutionalOrderMultiplier,
+            RealisticConfig.institutionalPositionLimit);
         if (RealisticConfig.maintenanceMarginBps > RealisticConfig.initialMarginBps) {
             throw new IOException("Maintenance margin cannot exceed initial margin");
         }
@@ -95,6 +107,14 @@ public final class RealisticService {
                 .multiplyExact(RealisticConfig.botOrderSize, RealisticConfig.institutionalOrderMultiplier);
             settings.volatility = RealisticConfig.fairVolatilityTicks * RealisticConfig.volatilityMultiplier;
             settings.impact = RealisticConfig.flowImpact;
+            settings.anchorFollowRate = RealisticConfig.anchorFollowRate;
+            settings.flowFollowRate = RealisticConfig.flowFollowRate;
+            settings.maxFlowImpactBps = RealisticConfig.maxFlowImpactBps;
+            settings.fairVwapWeight = RealisticConfig.fairVwapWeight;
+            settings.vwapDeviationVolMultiplier = RealisticConfig.vwapDeviationVolMultiplier;
+            settings.fairNoiseMemory = RealisticConfig.fairNoiseMemory;
+            settings.fairNoiseLimitMultiplier = RealisticConfig.fairNoiseLimitMultiplier;
+
             settings.jitter = RealisticConfig.intervalJitter;
             settings.regimeMinSteps = Math.multiplyExact(RealisticConfig.regimeMinSeconds, 10);
             settings.regimeMaxSteps = Math.multiplyExact(RealisticConfig.regimeMaxSeconds, 10);
@@ -142,12 +162,16 @@ public final class RealisticService {
             for (int i = 0; i < intervals.length; i++) intervals[i] = RealisticConfig.botIntervalsMillis[i];
             InventoryTransfers.await(
                 runtime.startBots(
-                    RealisticConfig.botCounts,
+                    RealisticConfig.botBudget(specs.size()),
                     intervals,
                     RealisticConfig.botProbabilities,
                     RealisticConfig.seed));
         } catch (IOException | RuntimeException e) {
-            runtime.close();
+            try {
+                runtime.close();
+            } catch (RuntimeException shutdown) {
+                e.addSuppressed(shutdown);
+            }
             throw e;
         }
     }
@@ -156,15 +180,66 @@ public final class RealisticService {
         return instance;
     }
 
+    public static void clearStartupFailure() {
+        startupFailure = null;
+        unavailableFrame = null;
+        unavailableRequests.clear();
+    }
+
+    public static boolean unavailable() {
+        return startupFailure != null;
+    }
+
+    /** A failed optional market must not prevent the Minecraft world from loading. Never fall back to legacy cash. */
+    public static void failStartup(Throwable error) {
+        startupFailure = error;
+        ClientExchangeData.Frame frame = new ClientExchangeData.Frame();
+        frame.version = 1;
+        frame.generation = UUID.randomUUID();
+        frame.revision = 1;
+        frame.tickValueCents = 1;
+        frame.marginBps = 1000;
+        frame.unavailable = true;
+        unavailableFrame = frame;
+        NHKantan.LOG.error(
+            "Market startup disabled for this world; world loading continues. Check config and preserve finance files.",
+            error);
+    }
+
+    public static void notifyUnavailable(EntityPlayerMP player) {
+        ClientExchangeData.Frame frame = unavailableFrame;
+        if (frame != null) ModNetwork.CHANNEL.sendTo(new ExchangeFrameMessage(frame), player);
+        player.addChatMessage(new net.minecraft.util.ChatComponentTranslation("message.nhkantan.market_unavailable"));
+    }
+
+    public static void requestUnavailable(UUID owner) {
+        unavailableRequests.offer(owner);
+    }
+
+    /** Main-thread dispatch for terminal requests received on the network thread. */
+    public static void tickUnavailable() {
+        if (!unavailable()) return;
+        MinecraftServer server = MinecraftServer.getServer();
+        if (server == null || server.getConfigurationManager() == null) return;
+        for (int i = 0; i < 16; i++) {
+            UUID owner = unavailableRequests.poll();
+            if (owner == null) return;
+            for (Object value : server.getConfigurationManager().playerEntityList) {
+                EntityPlayerMP player = (EntityPlayerMP) value;
+                if (player.getUniqueID()
+                    .equals(owner)) notifyUnavailable(player);
+            }
+        }
+    }
+
     public static void start(MinecraftServer server) {
         if (instance != null) throw new IllegalStateException("Realistic exchange is already running");
+        clearStartupFailure();
         try {
             instance = new RealisticService(server);
-            NHKantan.LOG.info("Realistic exchange ready; legacy records converted to net equity");
-        } catch (IOException e) {
-            throw new IllegalStateException(
-                "Unable to initialize realistic exchange; preserve existing checkpoints and remaining source records",
-                e);
+            NHKantan.LOG.info("Realistic exchange ready; checkpoint restored or net-equity migration completed");
+        } catch (IOException | RuntimeException error) {
+            failStartup(error);
         }
     }
 
@@ -335,15 +410,20 @@ public final class RealisticService {
     public static void stop() {
         RealisticService service = instance;
         instance = null;
+        clearStartupFailure();
         if (service == null) return;
         service.accepting = false;
         service.runtime.clock(false, service.gameTick);
         try {
             service.save();
-        } catch (IOException e) {
-            NHKantan.LOG.error("Unable to save realistic exchange at shutdown", e);
+        } catch (IOException | RuntimeException e) {
+            NHKantan.LOG.error("Unable to save realistic exchange at shutdown; checkpoint retained", e);
         } finally {
-            service.runtime.close();
+            try {
+                service.runtime.close();
+            } catch (RuntimeException e) {
+                NHKantan.LOG.error("Unable to stop realistic worker cleanly", e);
+            }
         }
     }
 

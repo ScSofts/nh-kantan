@@ -51,24 +51,31 @@ public class CommonProxy {
     }
 
     public void serverStarting(FMLServerStartingEvent event) {
-        java.nio.file.Path checkpoint = event.getServer()
-            .worldServerForDimension(0)
-            .getSaveHandler()
-            .getWorldDirectory()
-            .toPath()
-            .resolve("nhkantan/realistic.dat");
-        if (RealisticConfig.enabled) {
-            RealisticService.start(event.getServer());
-            return;
+        RealisticService.clearStartupFailure();
+        try {
+            java.nio.file.Path checkpoint = event.getServer()
+                .worldServerForDimension(0)
+                .getSaveHandler()
+                .getWorldDirectory()
+                .toPath()
+                .resolve("nhkantan/realistic.dat");
+            if (RealisticConfig.enabled) {
+                RealisticService.start(event.getServer());
+                return;
+            }
+            if (java.nio.file.Files.exists(checkpoint)) {
+                RealisticService.failStartup(
+                    new IllegalStateException(
+                        "This world has migrated to realistic trading; re-enable realistic.enabled. Legacy trading was not started."));
+                return;
+            }
+            // Market definitions are read here, on the server only; clients only ever receive public snapshots
+            MarketService.start(event.getServer());
+            WalletService.start(event.getServer());
+            TradingService.start(event.getServer());
+        } catch (RuntimeException error) {
+            RealisticService.failStartup(error);
         }
-        if (java.nio.file.Files.exists(checkpoint)) {
-            throw new IllegalStateException(
-                "This world has migrated to realistic trading; re-enable realistic mode to preserve its ledger");
-        }
-        // Market definitions are read here, on the server only; clients only ever receive public snapshots
-        MarketService.start(event.getServer());
-        WalletService.start(event.getServer());
-        TradingService.start(event.getServer());
     }
 
     public void serverStopped(FMLServerStoppedEvent event) {

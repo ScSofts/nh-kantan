@@ -24,6 +24,8 @@ public final class OpenExchangeMessage implements IMessage {
         public IMessage onMessage(OpenExchangeMessage message, MessageContext context) {
             RealisticService service = RealisticService.get();
             if (service != null) service.requestOpen(context.getServerHandler().playerEntity.getUniqueID());
+            else if (RealisticService.unavailable())
+                RealisticService.requestUnavailable(context.getServerHandler().playerEntity.getUniqueID());
             return null;
         }
     }

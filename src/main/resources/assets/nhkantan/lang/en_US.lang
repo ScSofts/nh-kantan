@@ -159,3 +159,5 @@ gui.nhkantan.exchange.closing=Closing...
 gui.nhkantan.exchange.exercise_hint=Early cash settlement at intrinsic value forfeits time value; in-the-money only. Retry if payout falls below preview.
 gui.nhkantan.exchange.close_option_hint=Sell back at the market-maker bid, including spread. Expired quotes or payouts below preview are rejected.
 gui.nhkantan.exchange.buyback_quote=Market-maker bid: %s (partial close in holdings)
+
+message.nhkantan.market_unavailable=The market is paused due to an invalid configuration or incompatible checkpoint. The world remains available. Check the Market startup disabled log, correct the config, then reload; keep the ledger files.

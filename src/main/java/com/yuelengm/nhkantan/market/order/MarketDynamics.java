@@ -21,15 +21,6 @@ final class MarketDynamics {
         BREAKOUT_DOWN
     }
 
-    // These defaults can be moved to Settings if you want runtime configuration.
-    private static final double ANCHOR_FOLLOW_RATE = 0.001;
-    private static final double FLOW_FOLLOW_RATE = 0.22;
-    private static final double MAX_FLOW_IMPACT_BPS = 20.0;
-    private static final double VWAP_WEIGHT = 0.15;
-    private static final double VWAP_DEVIATION_VOL_MULTIPLIER = 2.0;
-    private static final double FAIR_NOISE_MEMORY = 0.85;
-    private static final double FAIR_NOISE_LIMIT_MULTIPLIER = 3.0;
-
     private long randomState;
 
     /**
@@ -141,13 +132,13 @@ final class MarketDynamics {
         // Flow moves the *level* temporarily. It must not be added to the
         // fundamental price on every tick, which would accumulate indefinitely.
         double signedFlow = Double.isFinite(flow) ? clamp(flow, -1.0, 1.0) : 0.0;
-        double maxImpact = Math.max(0.0, fundamentalPrice * MAX_FLOW_IMPACT_BPS / 10000.0);
-        double desiredImpact = clamp(settings.impact * signedFlow, -maxImpact, maxImpact);
-        transientImpact += (desiredImpact - transientImpact) * FLOW_FOLLOW_RATE;
+        double maxImpact = Math.max(0.0, fundamentalPrice * settings.maxFlowImpactBps / 10000.0);
+        double desiredImpact = maxImpact * settings.impact * signedFlow;
+        transientImpact += (desiredImpact - transientImpact) * settings.flowFollowRate;
         price = bound(fundamentalPrice + transientImpact, settings);
 
         // Follow only the fundamental, not the trade-flow distortion.
-        anchor = bound(anchor + (fundamentalPrice - anchor) * ANCHOR_FOLLOW_RATE, settings);
+        anchor = bound(anchor + (fundamentalPrice - anchor) * settings.anchorFollowRate, settings);
         return price;
     }
 
@@ -229,21 +220,27 @@ final class MarketDynamics {
      * trade VWAP ratchet the entire reference process upward indefinitely.
      * This deliberately changes the old "VWAP + noise" behavior.
      */
-    double noisyFair(double average, double volatility) {
+    double noisyFair(double average, SimulatedInstrument.Settings settings) {
         migrateLegacyCheckpoint();
-        double vol = Double.isFinite(volatility) ? Math.max(0.0, volatility) : 0.0;
+        double vol = settings.volatility;
         double shock = (random() + random() + random() - 1.5) * vol;
         fairNoise = clamp(
-            fairNoise * FAIR_NOISE_MEMORY + shock,
-            -FAIR_NOISE_LIMIT_MULTIPLIER * vol,
-            FAIR_NOISE_LIMIT_MULTIPLIER * vol);
+            fairNoise * settings.fairNoiseMemory + shock,
+            -settings.fairNoiseLimitMultiplier * vol,
+            settings.fairNoiseLimitMultiplier * vol);
 
         double deviation = Double.isFinite(average) ? average - price : 0.0;
         double limitedDeviation = clamp(
             deviation,
-            -VWAP_DEVIATION_VOL_MULTIPLIER * vol,
-            VWAP_DEVIATION_VOL_MULTIPLIER * vol);
-        return price + VWAP_WEIGHT * limitedDeviation + fairNoise;
+            -settings.vwapDeviationVolMultiplier * vol,
+            settings.vwapDeviationVolMultiplier * vol);
+        return price + settings.fairVwapWeight * limitedDeviation + fairNoise;
+    }
+
+    double noisyFair(double average, double volatility) {
+        SimulatedInstrument.Settings defaults = new SimulatedInstrument.Settings();
+        defaults.volatility = Double.isFinite(volatility) ? Math.max(0, volatility) : 0;
+        return noisyFair(average, defaults);
     }
 
     boolean burst() {

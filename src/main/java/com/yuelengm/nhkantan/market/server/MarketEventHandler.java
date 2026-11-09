@@ -14,6 +14,10 @@ public class MarketEventHandler {
     @SubscribeEvent
     public void onServerTick(TickEvent.ServerTickEvent event) {
         if (event.phase != TickEvent.Phase.END) return;
+        if (RealisticService.unavailable()) {
+            RealisticService.tickUnavailable();
+            return;
+        }
         RealisticService realistic = RealisticService.get();
         if (realistic != null) {
             realistic.tick();
@@ -25,11 +29,15 @@ public class MarketEventHandler {
 
     @SubscribeEvent
     public void onPlayerLoggedIn(PlayerEvent.PlayerLoggedInEvent event) {
+        if (RealisticService.unavailable() && event.player instanceof EntityPlayerMP player) {
+            RealisticService.notifyUnavailable(player);
+            return;
+        }
         RealisticService realistic = RealisticService.get();
         if (realistic != null && event.player instanceof EntityPlayerMP player) {
             try {
                 realistic.login(player);
-            } catch (java.io.IOException e) {
+            } catch (java.io.IOException | RuntimeException e) {
                 com.yuelengm.nhkantan.NHKantan.LOG
                     .error("Unable to initialize exchange account or reconcile inventory", e);
             }
@@ -48,7 +56,7 @@ public class MarketEventHandler {
         if (service == null) return;
         try {
             service.save();
-        } catch (java.io.IOException e) {
+        } catch (java.io.IOException | RuntimeException e) {
             com.yuelengm.nhkantan.NHKantan.LOG.error("Unable to checkpoint realistic exchange", e);
         }
     }

@@ -92,3 +92,13 @@ SHA-256：`ab757282a4ff2b50df8d362b3f00cd8871d5beb9e0436bdcd86c9835b7b80611`。
 新产物：`build/libs/nhkantan-realistic-ui.jar`；源构建标识 `fa1221b-codex-01-realistic-prototype+fa1221bab6-dirty`。SHA-256：`7c4fbcfe87e81171e1f05e8cb27b51a3c54b034612bd044f18d6e12158bde335`。
 
 最终构建的专用服务器旧存档验证结果：待本轮启动完成后填写。
+
+## 用户后续修改上的配置/世界加载修复（2026-11-10）
+
+基于用户最新 `7f1bb11`，保留其 README、GUI 和独立基本价值模型修改，无 reset。按最新要求先运行 Python，16 个种子各 30 分钟、616 次状态切换，覆盖六种状态并验证模型序列化继续和非法配置归一化；该模型使用代理成交量，不能当作 Java 撮合实测。
+
+Java 接入原硬编码的动态参数并修复配置交叉校验；市场启动的配置/保存异常仅暂停市场、记录原始错误和提示玩家，不再阻断世界加载或启动另一份旧账本。安全可修的数值/数组在内存中纠正，损坏账本和已有仓位不被清空。配置说明见 `../../docs/REALISTIC_CONFIG.md`。
+
+仅执行 `bash gradlew --console=plain spotlessApply assemble`，编译和普通模组打包通过；没有运行 Java 测试或启动 MC 客户端/服务器。完整崩溃堆栈未提供，用户进世界与市场实际运行待最终人工测试。
+
+新测试 JAR：`build/libs/nhkantan-world-config-fix.jar`；构建基线 `7f1bb11`，SHA-256 `8d46734aea5759384879610fbe4be44295e44e14ee270d9c9d4b54ae9a746b39`。以此产物覆盖本轮之前的下载版本。

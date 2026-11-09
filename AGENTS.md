@@ -186,10 +186,20 @@ python3 /workspace/.cloud-setup/server-status.py
 ### 当前行情与机构盘口（2026-11-10）
 
 - `MarketDynamics` 保存趋势上涨/下跌、区间、回归与双向突破的持续阶段、目标、剩余进度及完整扰动随机状态；一般阶段 30–75 秒，突破较短，按活动市场时间推进。它影响机构预期和报价风险溢价，绝不直接生成公开价格或 K 线。
-- 公允价是最近默认 60 秒的真实成交量加权均价（按 OHLCV 桶窗口）加有界平滑扰动；`TradeHistory.Bar.turnover` 累积成交价×量，仅用于行情参考，现金仍为 long 分。无近期成交时沿用最后成交价；旧桶无 turnover 时以收盘价×量近似过渡。窗口还受保留历史长度约束，空桶不增加 VWAP 权重。
+- 当前公允参考保留用户后续提交的独立基本价值过程，加有界 VWAP 偏移与平滑扰动；VWAP 使用默认 60 秒的真实成交量加权均价（按 OHLCV 桶窗口）；`TradeHistory.Bar.turnover` 累积成交价×量，仅用于行情参考，现金仍为 long 分。无近期成交时沿用最后成交价；旧桶无 turnover 时以收盘价×量近似过渡。窗口还受保留历史长度约束，空桶不增加 VWAP 权重。
 - 机构委托价另叠加阶段预期、实际订单流和库存风险偏移；公允价与实际报价不是同一概念。阶段性净买卖和报价移动在唯一订单簿内形成真实成交，成交后均价继续移动；没有固定回归初始 100 或人为改写末价。过期噪声单被撤回，做市商每轮有限撤旧并补最多三档/侧，保持有限流动性。
 - 默认机构资本为原 botInitialCash 的 100 倍（1 亿 NHC/家）、基础订单规模为 botOrderSize 的 100 倍（300 张）；做市单约 300–900 张，普通主动单约 100–399 张，巨鲸单约 3000–15000 张，突破阶段可放大。机构默认限额 10 万张，玩家仍按原品种上限（默认 1000）。深度仍是有限真实挂单，不能承诺绝对不可操纵或任何订单立即全成。
 - `MarginLedger.provisionInstitution` 只由服务器为确定性机器人 UUID 调用；持久化机构资本基数与独立仓位限额。旧机器人按原资本补发增量，重复启动不再增发，不重置亏损，玩家账户不获得机构权限。降低机构限额不得低于已有仓位。
 - 新配置：`fairAverageSeconds`、`regimeMinSeconds/regimeMaxSeconds`、`trendMoveBps/breakoutMoveBps`、`institutionalCapitalMultiplier/institutionalOrderMultiplier/institutionalPositionLimit`；恢复旧存档时重新应用行为设置，不清玩家资产。
 - 修复图表只剩标题：嵌套 Flow 中图表的 expanded 高度曾退回默认控件高度，改成明确父容器高度减提示行。头部/局部滚动结构保留，尚需真人客户端复核实际缩放与绘制。
 - 最新完整 build、Spotless/Checkstyle 与 41 项 JUnit 回归通过；受控 5 分钟真实撮合样本价区间约 99.95–112.99 NHC，采样末累计约 235 万张，CSV/走势 PNG 在忽略的 build/reports。模型阶段与随机状态可精确恢复；所有机器人随机流完整恢复仍不是本次承诺。最终服务器验证与产物见 PROTOTYPE.md。
+
+### 当前交付约束与配置修复（2026-11-10）
+
+用户要求保留其新增 Markdown/README 和 GUI 修改，先用 Python 模拟确认状态转换，再落地 Java，**不执行 Java 测试、不启动游戏或专用服务器**，只构建 JAR 交给用户最终测试。当前基线已快进到其 `7f1bb11`，没有 reset 用户提交；不恢复用户删除的 MarketDynamicsTest。
+
+- `tools/simulate_market.py` 从配置注解读取默认值，支持 Forge cfg 或 JSON 覆盖；16 个种子各 30 分钟得到 616 次切换、覆盖六种状态，Python 序列化恢复与配置归一化通过。它是参考/状态模型，VWAP 使用代理成交量，不是 Java 撮合或 GUI 验证。
+- 保留用户独立 fundamental / transientImpact / legacy marker 的模型修改；将原硬编码的锚点跟随、临时流量上限、VWAP 权重/限幅与噪声记忆/限幅接入 `RealisticConfig` 和 `Settings`。`flowImpact` 明确为 maxFlowImpactBps 的比例，临时偏移不累积进基本价值。
+- 世界启动前归一化范围、阶段时长顺序、维持保证金及五类机器人数组，并按品种数应用 500 实例预算。归一化只改内存值；非法账本或不兼容资产设置仍拒绝交易，不默默重置资产。
+- 普通市场配置/存档启动异常不再阻断整个世界加载。记录原始异常，发送 unavailable 公共状态，登录/终端提示市场暂停；不回退旧账本。已迁移世界误关 realistic 开关也按暂停处理。终端提示仍在主线程分发，世界关闭时清理状态。
+- 本轮 `spotlessApply assemble` 编译打包通过；未运行 Java 测试、Minecraft 客户端或服务器。用户只确认异常涉及配置，尚未提供完整堆栈，因此不能宣称已复现并证明其具体崩溃根因。最终人工进入存档结果待反馈。配置和命令见 docs/REALISTIC_CONFIG.md。

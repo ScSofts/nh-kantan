@@ -159,3 +159,5 @@ gui.nhkantan.exchange.closing=平仓中
 gui.nhkantan.exchange.exercise_hint=按最新标的内在价值提前现金结算，放弃时间价值；仅实值可行权。到账不足预览值将拒绝，请刷新重试。
 gui.nhkantan.exchange.close_option_hint=按做市商回购价平仓（保留时间价值，含买卖价差）；过期报价或到账低于预览值将拒绝。
 gui.nhkantan.exchange.buyback_quote=做市商回购价：%s（持仓栏可部分平仓）
+
+message.nhkantan.market_unavailable=市场因配置或存档不兼容而暂停，世界仍可正常使用。请查看日志中的 Market startup disabled，修正配置后重进世界；不要删除账本。

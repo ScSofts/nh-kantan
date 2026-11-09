@@ -18,6 +18,7 @@ public final class ClientExchangeData {
         public int tickValueCents;
         public int marginBps;
         public int commissionPpm;
+        public boolean unavailable;
         public Map<String, String> names = Collections.emptyMap();
         public Map<String, SimulatedInstrument.Snapshot> instruments = Collections.emptyMap();
     }
