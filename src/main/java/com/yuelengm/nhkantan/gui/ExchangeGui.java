@@ -421,9 +421,11 @@ public final class ExchangeGui implements IGuiHolder<GuiData> {
                 .child(
                     NHKantan.proxy.createStockChart(() -> ClientMarketData.INSTANCE.get(selected), this::chartLines)
                         .fullWidth()
-                        .expanded())
+                        // Use explicit remaining height: nested Flow expansion can leave a bare Widget at 18 px.
+                        .heightRelOffset(1F, -13))
                 .child(
                     Widgets.text(IKey.lang("gui.nhkantan.exchange.chart_hint"))
+                        .height(11)
                         .color(0xFF91A8C6)
                         .textAlign(Alignment.CenterLeft)
                         .fullWidth());
