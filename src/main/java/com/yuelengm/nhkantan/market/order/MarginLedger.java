@@ -56,6 +56,8 @@ public final class MarginLedger {
         private long transferFrozen;
         private long transferId;
         private long transferDelta;
+        private long institutionalCapital;
+        private long institutionalPositionLimit;
         private int transferState; // 0: none, 1: prepared, 2: completed, 3: aborted
         private final Map<String, Position> positions = new HashMap<>();
     }
@@ -84,6 +86,28 @@ public final class MarginLedger {
 
     public boolean hasAccount(UUID owner) {
         return accounts.containsKey(owner);
+    }
+
+    /** Server-owned institution setup. Only the capital increase is granted once, never reset after losses. */
+    public void provisionInstitution(UUID owner, long capital, long legacyCapital, long positionLimit) {
+        if (capital < 1 || legacyCapital < 1 || positionLimit < 1 || positionLimit > 1000000)
+            throw new IllegalArgumentException("Invalid institution budget");
+        if (!hasAccount(owner)) {
+            importAccount(owner, capital);
+            Account account = requireAccount(owner);
+            account.institutionalCapital = capital;
+            account.institutionalPositionLimit = positionLimit;
+            return;
+        }
+        Account account = requireAccount(owner);
+        for (Position position : account.positions.values()) if (Math.abs(position.quantity) > positionLimit)
+            throw new IllegalArgumentException("Cannot lower institution limit beneath an existing position");
+        long previous = account.institutionalCapital == 0 ? legacyCapital : account.institutionalCapital;
+        long increase = Math.max(0, capital - previous);
+        long cash = Math.addExact(account.cash, increase);
+        account.cash = cash;
+        account.institutionalCapital = Math.max(previous, capital);
+        account.institutionalPositionLimit = positionLimit;
     }
 
     /** Market-thread cash payment (e.g. option premium), limited by both actual cash and free collateral. */
@@ -214,6 +238,9 @@ public final class MarginLedger {
             Account account = entry.getValue();
             if (entry.getKey() == null || account == null
                 || account.positions == null
+                || account.institutionalCapital < 0
+                || account.institutionalPositionLimit < 0
+                || account.institutionalPositionLimit > 1000000
                 || account.fees < 0
                 || account.frozen < 0
                 || account.transferFrozen < 0
@@ -228,7 +255,9 @@ public final class MarginLedger {
                 if (instrument == null || position == null
                     || position.quantity == 0
                     || position.quantity == Long.MIN_VALUE
-                    || Math.abs(position.quantity) > instrument.maxPosition
+                    || Math.abs(position.quantity)
+                        > (account.institutionalPositionLimit > 0 ? account.institutionalPositionLimit
+                            : instrument.maxPosition)
                     || position.cost < 0
                     || instrument.lastPrice == 0) {
                     throw new IllegalArgumentException("Invalid persisted position");
@@ -309,10 +338,20 @@ public final class MarginLedger {
             this.maximumPrice = maximumPrice;
         }
 
+        public long positionLimit() {
+            return maxPosition;
+        }
+
+        public long positionLimit(UUID owner) {
+            Account account = requireAccount(owner);
+            return account.institutionalPositionLimit > 0 ? account.institutionalPositionLimit : maxPosition;
+        }
+
         @Override
         public boolean reserve(OrderBook.Order order) {
             Account account = accounts.get(order.owner);
-            if (account == null || order.quantity > maxPosition || order.price > maximumPrice) return false;
+            if (account == null || order.quantity > positionLimit(order.owner) || order.price > maximumPrice)
+                return false;
             if (order.reduceOnly && executable(order) < order.quantity) return false;
             try {
                 if (!order.reduceOnly) {
@@ -322,8 +361,8 @@ public final class MarginLedger {
                         if (reservation.account == account && reservation.side == order.side)
                             exposure = Math.addExact(exposure, Math.multiplyExact(sign, reservation.quantity));
                     }
-                    if (Math.abs(Math.addExact(exposure, Math.multiplyExact(sign, order.quantity))) > maxPosition
-                        || account.cash < 0) return false;
+                    if (Math.abs(Math.addExact(exposure, Math.multiplyExact(sign, order.quantity)))
+                        > positionLimit(order.owner) || account.cash < 0) return false;
                 }
                 // Both sides reserve worst-case notional, so a resting order cannot spend someone else's collateral.
                 long reservePrice = order.side == OrderBook.Side.SELL ? maximumPrice : order.price;
@@ -355,7 +394,7 @@ public final class MarginLedger {
         public boolean restore(OrderBook.Order order) {
             Account account = accounts.get(order.owner);
             if (account == null || order.price > maximumPrice
-                || order.remaining > maxPosition
+                || order.remaining > positionLimit(order.owner)
                 || reservations.containsKey(order.id)) return false;
             long reservePrice = order.side == OrderBook.Side.SELL ? maximumPrice : order.price;
             long value = Math.multiplyExact(reservePrice, tickValue);
