@@ -73,7 +73,7 @@ public class StockPanelRenderer {
         }
 
         double change = stock.latestChange();
-        String priceText = PriceFormat.price(stock.price());
+        String priceText = PriceFormat.price(stock.price(), stock.priceDecimals());
         String changeText = PriceFormat.change(change);
         float right = x + width - pad;
         text(font, stock.name(), x + pad, y + pad, unit, textZ, COLOR_TITLE);
@@ -105,12 +105,13 @@ public class StockPanelRenderer {
         min -= padding;
         max += padding;
 
-        int decimals = PriceFormat.decimalsFor(max);
+        int decimals = stock.isExchange() ? stock.priceDecimals() : PriceFormat.decimalsFor(max);
         float labelWidth = font.getStringWidth(PriceFormat.price(max, decimals)) * unit + PADDING * unit;
         float plotRight = x1 - labelWidth;
         if (plotRight - x0 < 10.0F * unit || y1 - y0 < 10.0F * unit) return;
 
-        PriceScale scale = new PriceScale(min, max, y0, y1);
+        float priceBottom = stock.isExchange() ? y1 - (y1 - y0) * 0.18F : y1;
+        PriceScale scale = new PriceScale(min, max, y0, priceBottom);
         float textZ = z + zStep * 2.0F;
         float labelX = plotRight + PADDING * unit * 0.5F;
         float halfLine = font.FONT_HEIGHT * unit * 0.5F;
@@ -119,10 +120,29 @@ public class StockPanelRenderer {
         GL11.glDisable(GL11.GL_TEXTURE_2D);
         tessellator.startDrawingQuads();
         for (int i = 0; i < GRID_LEVELS; i++) {
-            float gy = y0 + (y1 - y0) * i / (GRID_LEVELS - 1);
+            float gy = y0 + (priceBottom - y0) * i / (GRID_LEVELS - 1);
             quad(tessellator, x0, gy, plotRight, gy + unit * 0.5F, z, COLOR_GRID);
         }
         drawCandles(tessellator, candles, stock.candleSlots(), scale, x0, plotRight, unit, z + zStep);
+        if (stock.isExchange()) {
+            long maxVolume = 1;
+            for (Candle candle : candles) maxVolume = Math.max(maxVolume, candle.volume());
+            float slot = (plotRight - x0) / stock.candleSlots();
+            int offset = stock.candleSlots() - candles.size();
+            for (int i = 0; i < candles.size(); i++) {
+                Candle candle = candles.get(i);
+                float left = x0 + (offset + i) * slot;
+                float height = (y1 - priceBottom) * 0.8F * candle.volume() / maxVolume;
+                quad(
+                    tessellator,
+                    left,
+                    y1 - height,
+                    left + slot * BODY_RATIO,
+                    y1,
+                    z,
+                    candle.isRising() ? COLOR_UP : COLOR_DOWN);
+            }
+        }
         float priceY = scale.y(stock.price());
         int priceColor = colorOf(stock.latestChange());
         for (float dx = x0; dx < plotRight; dx += (DASH + DASH_GAP) * unit) {
@@ -134,7 +154,7 @@ public class StockPanelRenderer {
         GL11.glEnable(GL11.GL_TEXTURE_2D);
 
         for (int i = 0; i < GRID_LEVELS; i++) {
-            float gy = y0 + (y1 - y0) * i / (GRID_LEVELS - 1);
+            float gy = y0 + (priceBottom - y0) * i / (GRID_LEVELS - 1);
             // Skip grid labels that would overlap the current price tag
             if (Math.abs(gy - priceY) < halfLine * 2.0F) continue;
             String label = PriceFormat.price(scale.price(gy), decimals);
@@ -164,8 +184,11 @@ public class StockPanelRenderer {
             Candle candle = candles.get(i);
             float cx = x0 + (first + i + 0.5F) * slotWidth;
             int color = candle.isRising() ? COLOR_UP : COLOR_DOWN;
-            float top = scale.y(candle.high());
-            float bottom = scale.y(candle.low());
+            float wickTop = scale.y(candle.high());
+            float wickBottom = scale.y(candle.low());
+            quad(tessellator, cx - unit * 0.25F, wickTop, cx + unit * 0.25F, wickBottom, z, color);
+            float top = scale.y(Math.max(candle.open(), candle.close()));
+            float bottom = scale.y(Math.min(candle.open(), candle.close()));
             if (bottom - top < minBody) {
                 float center = (top + bottom) * 0.5F;
                 top = center - minBody * 0.5F;

@@ -1,5 +1,6 @@
 package com.yuelengm.nhkantan.client;
 
+import com.yuelengm.nhkantan.market.view.ClientExchangeData;
 import com.yuelengm.nhkantan.market.view.ClientMarketData;
 
 import cpw.mods.fml.common.eventhandler.SubscribeEvent;
@@ -13,5 +14,6 @@ public class ClientMarketEventHandler {
     @SubscribeEvent
     public void onDisconnect(FMLNetworkEvent.ClientDisconnectionFromServerEvent event) {
         ClientMarketData.INSTANCE.clear();
+        ClientExchangeData.clear();
     }
 }

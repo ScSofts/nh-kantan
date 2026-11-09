@@ -18,6 +18,7 @@ public class ModConfigs {
             ConfigurationManager.registerConfig(ExchangeConfig.class);
             ConfigurationManager.registerConfig(CompatConfig.class);
             ConfigurationManager.registerConfig(ClientConfig.class);
+            ConfigurationManager.registerConfig(RealisticConfig.class);
         } catch (ConfigException e) {
             throw new IllegalStateException("Failed to register NH kantan config", e);
         }

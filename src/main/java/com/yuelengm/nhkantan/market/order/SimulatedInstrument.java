@@ -1,0 +1,412 @@
+package com.yuelengm.nhkantan.market.order;
+
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Random;
+import java.util.UUID;
+
+import com.google.gson.Gson;
+
+/** Pure market-thread instrument: bots, players and option hedges all enter the same book. */
+public final class SimulatedInstrument {
+
+    public enum Strategy {
+        MARKET_MAKER,
+        TREND,
+        MEAN_REVERSION,
+        NOISE,
+        WHALE
+    }
+
+    public static final class Settings {
+
+        public long lowerPrice = 1;
+        public long upperPrice = 100000;
+        public long initialPrice = 10000;
+        public long botCashCents = 100000000;
+        public int depth = 8;
+        public long baseOrderSize = 3;
+        public double volatility = 0.5;
+        public double impact = 0.02;
+        public double jitter = 0.4;
+        public int historyCapacity = 100;
+        public long candleTicks = 40;
+
+        Settings copy() {
+            if (lowerPrice < 1 || upperPrice <= lowerPrice
+                || initialPrice < lowerPrice
+                || initialPrice > upperPrice
+                || botCashCents < 1
+                || depth < 1
+                || depth > 100
+                || baseOrderSize < 1
+                || baseOrderSize > 10000
+                || !Double.isFinite(volatility)
+                || volatility < 0
+                || !Double.isFinite(impact)
+                || impact < 0
+                || !Double.isFinite(jitter)
+                || jitter < 0
+                || jitter > 1) {
+                throw new IllegalArgumentException("Invalid instrument simulation settings");
+            }
+            Settings copy = new Settings();
+            copy.lowerPrice = lowerPrice;
+            copy.upperPrice = upperPrice;
+            copy.initialPrice = initialPrice;
+            copy.botCashCents = botCashCents;
+            copy.depth = depth;
+            copy.baseOrderSize = baseOrderSize;
+            copy.volatility = volatility;
+            copy.impact = impact;
+            copy.jitter = jitter;
+            copy.historyCapacity = historyCapacity;
+            copy.candleTicks = candleTicks;
+            return copy;
+        }
+    }
+
+    public static final class Snapshot {
+
+        public final List<Level> bids;
+        public final List<Level> asks;
+        public final List<TradeHistory.Bar> candles;
+        public final long lastPrice;
+        public final long volume;
+        public final int capacity;
+        public final long bucketTicks;
+        public final long lowerPrice;
+        public final long upperPrice;
+
+        private Snapshot(SimulatedInstrument instrument) {
+            bids = instrument.depth(OrderBook.Side.BUY);
+            asks = instrument.depth(OrderBook.Side.SELL);
+            candles = instrument.history.snapshot();
+            lastPrice = instrument.lastPrice;
+            volume = instrument.volume;
+            capacity = instrument.settings.historyCapacity;
+            bucketTicks = instrument.settings.candleTicks;
+            lowerPrice = instrument.settings.lowerPrice;
+            upperPrice = instrument.settings.upperPrice;
+        }
+    }
+
+    /** Public aggregated depth deliberately omits account identities and private order IDs. */
+    public static final class Level {
+
+        public final long price;
+        public final long quantity;
+
+        private Level(long price, long quantity) {
+            this.price = price;
+            this.quantity = quantity;
+        }
+    }
+
+    private List<Level> depth(OrderBook.Side side) {
+        Map<Long, Long> amounts = new LinkedHashMap<>();
+        for (OrderBook.Order order : book.orders(side)) {
+            if (!amounts.containsKey(order.price) && amounts.size() >= settings.depth) break;
+            amounts.put(order.price, Math.addExact(amounts.getOrDefault(order.price, 0L), order.remaining));
+        }
+        List<Level> result = new ArrayList<>();
+        for (Map.Entry<Long, Long> entry : amounts.entrySet()) result.add(new Level(entry.getKey(), entry.getValue()));
+        return Collections.unmodifiableList(result);
+    }
+
+    public List<OrderBook.Order> orders(UUID owner) {
+        List<OrderBook.Order> result = new ArrayList<>();
+        for (OrderBook.Side side : OrderBook.Side.values()) {
+            for (OrderBook.Order order : book.orders(side)) if (order.owner.equals(owner)) result.add(order);
+        }
+        return Collections.unmodifiableList(result);
+    }
+
+    private final String id;
+    private final Settings settings;
+    private final MarginLedger ledger;
+    private final OrderBook book;
+    private final TradeHistory history;
+    private final Random fairRandom;
+    private double fairPrice;
+    private double drift;
+    private double flow;
+    private long lastPrice;
+    private long volume;
+    private final Map<UUID, Protection> protections = new LinkedHashMap<>();
+    private boolean checkingProtections;
+
+    public static final class Protection {
+
+        public final long stopPrice;
+        public final long takePrice;
+        public final long quantity;
+        public final int direction;
+        private final long initialPosition;
+        private long takeOrder;
+        private boolean triggered;
+
+        private Protection(long stopPrice, long takePrice, long quantity, long held) {
+            this.stopPrice = stopPrice;
+            this.takePrice = takePrice;
+            this.quantity = quantity;
+            this.direction = Long.signum(held);
+            initialPosition = Math.abs(held);
+        }
+    }
+
+    public void protect(UUID owner, long quantity, long stopPrice, long takePrice, long gameTick) {
+        long held = ledger.position(owner, id).quantity;
+        if (quantity < 1 || quantity > Math.abs(held)
+            || stopPrice < 0
+            || takePrice < 0
+            || stopPrice > settings.upperPrice
+            || takePrice > settings.upperPrice
+            || (stopPrice > 0 && stopPrice < settings.lowerPrice)
+            || (takePrice > 0 && takePrice < settings.lowerPrice)
+            || (stopPrice == 0 && takePrice == 0)) throw new IllegalArgumentException("Invalid position protection");
+        Protection prior = protections.remove(owner);
+        if (prior != null && prior.takeOrder > 0) book.cancel(owner, prior.takeOrder);
+        Protection protection = new Protection(stopPrice, takePrice, quantity, held);
+        protections.put(owner, protection);
+        if (takePrice > 0) {
+            OrderBook.Result take = submit(
+                owner,
+                held > 0 ? OrderBook.Side.SELL : OrderBook.Side.BUY,
+                takePrice,
+                quantity,
+                false,
+                true,
+                gameTick);
+            protection.takeOrder = take.order.id;
+        }
+        checkProtections(gameTick);
+    }
+
+    public void checkProtections(long gameTick) {
+        if (checkingProtections) return;
+        checkingProtections = true;
+        try {
+            for (Map.Entry<UUID, Protection> entry : new ArrayList<>(protections.entrySet())) {
+                UUID owner = entry.getKey();
+                Protection protection = entry.getValue();
+                long position = ledger.position(owner, id).quantity;
+                long alreadyClosed = Math.max(0, protection.initialPosition - Math.abs(position));
+                long remaining = Math.max(0, protection.quantity - alreadyClosed);
+                if (Long.signum(position) != protection.direction || remaining == 0) {
+                    if (protection.takeOrder > 0) book.cancel(owner, protection.takeOrder);
+                    protections.remove(owner);
+                    continue;
+                }
+                boolean stopped = lastPrice > 0 && protection.stopPrice > 0
+                    && (position > 0 ? lastPrice <= protection.stopPrice : lastPrice >= protection.stopPrice);
+                if (!protection.triggered && !stopped) continue;
+                protection.triggered = true;
+                if (protection.takeOrder > 0) book.cancel(owner, protection.takeOrder);
+                submit(
+                    owner,
+                    position > 0 ? OrderBook.Side.SELL : OrderBook.Side.BUY,
+                    position > 0 ? settings.lowerPrice : settings.upperPrice,
+                    Math.min(Math.abs(position), remaining),
+                    true,
+                    true,
+                    gameTick);
+                if (ledger.position(owner, id).quantity == 0) protections.remove(owner);
+            }
+        } finally {
+            checkingProtections = false;
+        }
+    }
+
+    private static final class Checkpoint {
+
+        private int version;
+        private String id;
+        private Settings settings;
+        private String book;
+        private List<TradeHistory.Bar> candles;
+        private double fair;
+        private double drift;
+        private double flow;
+        private long lastPrice;
+        private long volume;
+        private Map<UUID, Protection> protections;
+    }
+
+    public SimulatedInstrument(String id, Settings settings, MarginLedger ledger, MarginLedger.Instrument settlement,
+        long seed) {
+        this.id = id;
+        this.settings = settings.copy();
+        this.ledger = ledger;
+        this.book = new OrderBook(settlement);
+        this.history = new TradeHistory(settings.historyCapacity, settings.candleTicks);
+        fairRandom = new Random(seed ^ id.hashCode());
+        fairPrice = settings.initialPrice;
+    }
+
+    private SimulatedInstrument(Checkpoint saved, MarginLedger ledger, long seed) {
+        id = saved.id;
+        settings = saved.settings.copy();
+        this.ledger = ledger;
+        book = OrderBook.restore(saved.book, ledger.instrument(id));
+        history = TradeHistory.restore(settings.historyCapacity, settings.candleTicks, saved.candles);
+        fairRandom = new Random(seed ^ id.hashCode());
+        fairPrice = saved.fair;
+        drift = saved.drift;
+        flow = saved.flow;
+        lastPrice = saved.lastPrice;
+        volume = saved.volume;
+        if (saved.protections == null) throw new IllegalArgumentException("Missing saved protections");
+        for (Map.Entry<UUID, Protection> entry : saved.protections.entrySet()) {
+            Protection protection = entry.getValue();
+            if (!ledger.hasAccount(entry.getKey()) || protection == null
+                || protection.quantity < 1
+                || Math.abs(protection.direction) != 1
+                || protection.stopPrice < 0
+                || protection.takePrice < 0) {
+                throw new IllegalArgumentException("Invalid saved protection");
+            }
+        }
+        protections.putAll(saved.protections);
+    }
+
+    public String checkpoint() {
+        Checkpoint saved = new Checkpoint();
+        saved.version = 1;
+        saved.id = id;
+        saved.settings = settings;
+        saved.book = book.checkpoint();
+        saved.candles = history.snapshot();
+        saved.fair = fairPrice;
+        saved.drift = drift;
+        saved.flow = flow;
+        saved.lastPrice = lastPrice;
+        saved.volume = volume;
+        saved.protections = protections;
+        return new Gson().toJson(saved);
+    }
+
+    public static SimulatedInstrument restore(String json, MarginLedger ledger, long seed) {
+        Checkpoint saved = new Gson().fromJson(json, Checkpoint.class);
+        if (saved == null || saved.version != 1
+            || saved.id == null
+            || saved.settings == null
+            || !Double.isFinite(saved.fair)
+            || !Double.isFinite(saved.drift)
+            || !Double.isFinite(saved.flow)
+            || saved.fair < saved.settings.lowerPrice
+            || saved.fair > saved.settings.upperPrice
+            || saved.volume < 0
+            || saved.lastPrice < 0
+            || saved.lastPrice > saved.settings.upperPrice) {
+            throw new IllegalArgumentException("Unsupported instrument checkpoint");
+        }
+        return new SimulatedInstrument(saved, ledger, seed);
+    }
+
+    public OrderBook.Result submit(UUID owner, OrderBook.Side side, long price, long quantity, boolean market,
+        boolean reduceOnly, long gameTick) {
+        if (price < settings.lowerPrice || price > settings.upperPrice) {
+            throw new IllegalArgumentException("Order price outside instrument bounds");
+        }
+        OrderBook.Result result = book.submit(owner, side, price, quantity, market, reduceOnly);
+        for (OrderBook.Fill fill : result.fills) {
+            history.fill(gameTick, fill.price, fill.quantity);
+            lastPrice = fill.price;
+            volume = Math.addExact(volume, fill.quantity);
+            flow = Math.max(-1, Math.min(1, flow * 0.95 + (side == OrderBook.Side.BUY ? 1 : -1) * 0.05));
+        }
+        checkProtections(gameTick);
+        return result;
+    }
+
+    public boolean cancel(UUID owner, long id) {
+        return book.cancel(owner, id);
+    }
+
+    public Snapshot snapshot(long gameTick) {
+        history.advance(gameTick);
+        return new Snapshot(this);
+    }
+
+    /** Hidden fair price only informs bots; it is never returned by a public snapshot. */
+    public void updateFairPrice() {
+        drift = Math.max(-0.15, Math.min(0.15, drift * 0.98 + fairRandom.nextGaussian() * 0.01));
+        fairPrice = Math.max(
+            settings.lowerPrice,
+            Math.min(
+                settings.upperPrice,
+                fairPrice + drift + settings.volatility * fairRandom.nextGaussian() + settings.impact * flow));
+        flow *= 0.95;
+    }
+
+    /** Register from the worker thread before opening the player command endpoint. */
+    public void addBot(MarketWorker worker, Strategy strategy, int index, long seed, long interval,
+        double probability) {
+        UUID owner = UUID
+            .nameUUIDFromBytes(("nhkantan:" + id + ":" + strategy + ":" + index).getBytes(StandardCharsets.UTF_8));
+        if (!ledger.hasAccount(owner)) ledger.importAccount(owner, settings.botCashCents);
+        Random random = new Random(seed ^ owner.getLeastSignificantBits());
+        worker.schedule(
+            seed ^ owner.getMostSignificantBits(),
+            interval,
+            settings.jitter,
+            probability,
+            () -> act(owner, strategy, random, worker.gameTick()));
+    }
+
+    private void act(UUID owner, Strategy strategy, Random random, long gameTick) {
+        if (strategy == Strategy.MARKET_MAKER) {
+            maintainQuotes(owner, random, gameTick);
+            return;
+        }
+        List<TradeHistory.Bar> bars = history.snapshot();
+        long reference = lastPrice > 0 ? lastPrice : Math.round(fairPrice);
+        double signal;
+        if (strategy == Strategy.TREND) {
+            if (bars.size() < 2) return;
+            int lookback = Math.min(bars.size() - 1, 3 + random.nextInt(10));
+            signal = reference - bars.get(bars.size() - 1 - lookback).close;
+        } else if (strategy == Strategy.MEAN_REVERSION) {
+            if (bars.isEmpty()) return;
+            int window = Math.min(bars.size(), 5 + random.nextInt(15));
+            double sum = 0;
+            for (int i = bars.size() - window; i < bars.size(); i++) sum += bars.get(i).close;
+            signal = sum / window - reference;
+        } else signal = random.nextBoolean() ? 1 : -1;
+        if (signal == 0) return;
+        OrderBook.Side side = signal > 0 ? OrderBook.Side.BUY : OrderBook.Side.SELL;
+        long quantity = strategy == Strategy.WHALE ? 30 + random.nextInt(121)
+            : 1 + (long) (random.nextDouble() * settings.baseOrderSize);
+        boolean market = strategy != Strategy.NOISE || random.nextBoolean();
+        long price = market ? (side == OrderBook.Side.BUY ? settings.upperPrice : settings.lowerPrice)
+            : bounded(reference + (side == OrderBook.Side.BUY ? -1 : 1) * (1 + random.nextInt(5)));
+        submit(owner, side, price, quantity, market, false, gameTick);
+    }
+
+    private void maintainQuotes(UUID owner, Random random, long gameTick) {
+        List<OrderBook.Order> owned = new ArrayList<>();
+        for (OrderBook.Side side : OrderBook.Side.values()) {
+            for (OrderBook.Order order : book.orders(side)) if (order.owner.equals(owner)) owned.add(order);
+        }
+        Collections.shuffle(owned, random);
+        if (!owned.isEmpty()) book.cancel(owner, owned.get(0).id); // Incremental refresh, never cancel the whole book.
+        if (owned.size() >= settings.depth * 2) return;
+        long inventory = ledger.position(owner, id).quantity;
+        double center = fairPrice - inventory * 0.01;
+        for (OrderBook.Side side : OrderBook.Side.values()) {
+            long distance = 1 + random.nextInt(settings.depth);
+            long price = bounded(Math.round(center) + (side == OrderBook.Side.BUY ? -distance : distance));
+            long quantity = 1 + (long) (random.nextDouble() * settings.baseOrderSize * 3);
+            submit(owner, side, price, quantity, false, false, gameTick);
+        }
+    }
+
+    private long bounded(long price) {
+        return Math.max(settings.lowerPrice, Math.min(settings.upperPrice, price));
+    }
+}

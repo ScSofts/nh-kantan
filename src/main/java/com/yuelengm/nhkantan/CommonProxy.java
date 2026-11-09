@@ -7,10 +7,13 @@ import com.cleanroommc.modularui.widget.Widget;
 import com.yuelengm.nhkantan.block.ModBlocks;
 import com.yuelengm.nhkantan.compat.GtnhCoinProvider;
 import com.yuelengm.nhkantan.config.ModConfigs;
+import com.yuelengm.nhkantan.config.RealisticConfig;
+import com.yuelengm.nhkantan.gui.ExchangeGui;
 import com.yuelengm.nhkantan.gui.WalletGui;
 import com.yuelengm.nhkantan.item.ModItems;
 import com.yuelengm.nhkantan.market.server.MarketEventHandler;
 import com.yuelengm.nhkantan.market.server.MarketService;
+import com.yuelengm.nhkantan.market.server.RealisticService;
 import com.yuelengm.nhkantan.market.view.StockView;
 import com.yuelengm.nhkantan.network.ModNetwork;
 import com.yuelengm.nhkantan.recipe.ModRecipes;
@@ -33,9 +36,11 @@ public class CommonProxy {
         ModRecipes.register();
         ModNetwork.register();
         WalletGui.register();
+        ExchangeGui.register();
         FMLCommonHandler.instance()
             .bus()
             .register(new MarketEventHandler());
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(new MarketEventHandler());
         NHKantan.LOG.info("NH kantan version " + Tags.VERSION + " initializing.");
     }
 
@@ -46,6 +51,20 @@ public class CommonProxy {
     }
 
     public void serverStarting(FMLServerStartingEvent event) {
+        java.nio.file.Path checkpoint = event.getServer()
+            .worldServerForDimension(0)
+            .getSaveHandler()
+            .getWorldDirectory()
+            .toPath()
+            .resolve("nhkantan/realistic.dat");
+        if (RealisticConfig.enabled) {
+            RealisticService.start(event.getServer());
+            return;
+        }
+        if (java.nio.file.Files.exists(checkpoint)) {
+            throw new IllegalStateException(
+                "This world has migrated to realistic trading; re-enable realistic mode to preserve its ledger");
+        }
         // Market definitions are read here, on the server only; clients only ever receive public snapshots
         MarketService.start(event.getServer());
         WalletService.start(event.getServer());
@@ -53,6 +72,7 @@ public class CommonProxy {
     }
 
     public void serverStopped(FMLServerStoppedEvent event) {
+        RealisticService.stop();
         MarketService.stop();
         WalletService.stop();
         TradingService.stop();

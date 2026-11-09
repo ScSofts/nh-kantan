@@ -51,6 +51,23 @@ public class ClientMarketData {
         revision++;
     }
 
+    public void applyExchange(ClientExchangeData.Frame frame) {
+        Map<String, StockView> next = new LinkedHashMap<>();
+        for (Map.Entry<String, com.yuelengm.nhkantan.market.order.SimulatedInstrument.Snapshot> entry : frame.instruments
+            .entrySet()) {
+            if (entry.getValue().lastPrice <= 0) continue;
+            next.put(
+                entry.getKey(),
+                StockView.fromExchange(
+                    entry.getKey(),
+                    frame.names.getOrDefault(entry.getKey(), entry.getKey()),
+                    entry.getValue(),
+                    frame.tickValueCents));
+        }
+        stocks = Collections.unmodifiableMap(next);
+        revision++;
+    }
+
     /** All stocks in server definition order. */
     public Collection<StockView> stocks() {
         return stocks.values();

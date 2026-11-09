@@ -20,6 +20,8 @@ public class StockView {
     private final double upperBound;
     private final LeverageRange leverage;
     private final PriceWindow prices;
+    private boolean exchange;
+    private double exchangePrice;
     private List<Candle> candles = Collections.emptyList();
 
     /**
@@ -57,8 +59,39 @@ public class StockView {
         return leverage;
     }
 
-    public float price() {
-        return prices.latest();
+    public double price() {
+        return exchange ? exchangePrice : prices.latest();
+    }
+
+    public static StockView fromExchange(String id, String name,
+        com.yuelengm.nhkantan.market.order.SimulatedInstrument.Snapshot snapshot, int tickValueCents) {
+        double scale = tickValueCents / 100D;
+        StockView view = new StockView(
+            new StockSnapshot(id, name, 0, Double.MAX_VALUE, LeverageRange.DEFAULT, new float[0]),
+            snapshot.capacity + 1);
+        view.exchange = true;
+        view.exchangePrice = snapshot.lastPrice * scale;
+        List<Candle> candles = new ArrayList<>();
+        for (com.yuelengm.nhkantan.market.order.TradeHistory.Bar bar : snapshot.candles) {
+            candles.add(
+                new Candle(
+                    bar.open * scale,
+                    bar.high * scale,
+                    bar.low * scale,
+                    bar.close * scale,
+                    bar.volume,
+                    bar.tick));
+        }
+        view.candles = Collections.unmodifiableList(candles);
+        return view;
+    }
+
+    public boolean isExchange() {
+        return exchange;
+    }
+
+    public int priceDecimals() {
+        return exchange ? 2 : PriceFormat.decimalsFor(price());
     }
 
     /** Visible candles, oldest first. Read only. */
@@ -73,6 +106,14 @@ public class StockView {
 
     /** Relative change of the latest, e.g. {@code 0.05} for +5%. */
     public double latestChange() {
+        if (exchange) {
+            if (candles.isEmpty()) return 0;
+            double prior = candles.size() > 1 ? candles.get(candles.size() - 2)
+                .close()
+                : candles.get(0)
+                    .open();
+            return prior <= 0 ? 0 : exchangePrice / prior - 1;
+        }
         if (prices.size() < 2) return 0.0D;
         float previous = prices.get(prices.size() - 2);
         return previous == 0.0F ? 0.0D : (double) prices.latest() / previous - 1.0D;

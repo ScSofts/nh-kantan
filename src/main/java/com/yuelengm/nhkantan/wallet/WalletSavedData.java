@@ -1,5 +1,6 @@
 package com.yuelengm.nhkantan.wallet;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -20,6 +21,11 @@ public class WalletSavedData extends WorldSavedData {
     private static final String NBT_LEGACY_BALANCES = "Balances";
 
     private final Map<UUID, Long> balances = new HashMap<>();
+
+    /** Detached server-side balances for the one-time equity migration. Never send this map to clients. */
+    public Map<UUID, Long> snapshot() {
+        return Collections.unmodifiableMap(new HashMap<>(balances));
+    }
 
     /** Constructor required by the map storage, which instantiates saved data reflectively. */
     public WalletSavedData(String name) {

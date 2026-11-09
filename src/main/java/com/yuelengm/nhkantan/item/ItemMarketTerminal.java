@@ -101,14 +101,17 @@ public class ItemMarketTerminal extends Item implements IGuiHolder<PlayerInvento
 
     @SideOnly(Side.CLIENT)
     private static void openTerminalClient() {
-        if (ClientConfig.showLifeWarning) {
-            RealLifeWarningGui.openClient(
-                () -> GuiFactories.playerInventory()
-                    .openFromMainHandClient());
-        } else {
-            GuiFactories.playerInventory()
-                .openFromMainHandClient();
-        }
+        Runnable open = () -> {
+            if (com.yuelengm.nhkantan.market.view.ClientExchangeData.get() != null) {
+                com.yuelengm.nhkantan.network.ModNetwork.CHANNEL
+                    .sendToServer(new com.yuelengm.nhkantan.network.OpenExchangeMessage());
+            } else {
+                GuiFactories.playerInventory()
+                    .openFromMainHandClient();
+            }
+        };
+        if (ClientConfig.showLifeWarning) RealLifeWarningGui.openClient(open::run);
+        else open.run();
     }
 
     @Override

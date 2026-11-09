@@ -1,0 +1,171 @@
+# NH kantan：Agent 项目指南
+
+本文件面向首次接触仓库的 AI agent，介绍目标、架构、开发约束和已验证现状。适用于整个仓库。开始任务时阅读本文件，再阅读相关源码；源码、配置与实际验证结果是判断实现状态的依据。用户当前要求优先于本文件。
+
+## 1. 项目目标与范围
+
+NH kantan 是 Minecraft 1.7.10 / Forge / GTNH 生态中的虚构股市与保证金交易模组，模组 ID 为 `nhkantan`，Java 根包为 `com.yuelengm.nhkantan`。
+
+玩家使用投资终端查看行情、做多/做空和管理持仓，通过钱包将游戏物品兑换为市场币，也可以在世界中放置股市显示屏。服主通过 JSON 公式和配置调整行情、杠杆、费用与兑换规则。GTNH 任务币联动是现有玩法的一部分。
+
+- 行情来自服务器内的模拟规则，仅在服务器运行时按 tick 推进；没有接入现实证券行情或真实交易。
+- 保留游戏内虚构交易的定位、首次使用须知及“不再显示”设置。
+- 默认资源目前包含 6 种行情模式、2 支股票；这些是可配置内容，不应在业务代码中写死数量或 ID。
+- `assets/STOCK_MARKET_PLAN.md` 是历史设计材料，含未实现或已变化的设想。不要把其中的路线图直接当成功能现状。
+- `specs/01-realistic/` 保存订单簿、机器人、净仓位及期权改造的目标规格（`spec.md`）、仓库对接与建议决策（`plan.md`）、分阶段任务及验收（`tasks.md`）。当前已交付待人工体验的原型，已接入游戏但未完成完整规格；最新状态及限制见 `specs/01-realistic/PROTOTYPE.md`。实施时同步维护三份文档及本指南，不能把待确认建议或已列出的任务当成已完成行为。
+
+## 2. 代码地图与阅读顺序
+
+主要 Java 路径均相对于 `src/main/java/com/yuelengm/nhkantan/`：
+
+| 路径 / 入口 | 职责 |
+| --- | --- |
+| `NHKantan`、`CommonProxy`、`ClientProxy` | Forge 生命周期、注册与客户端专用实现的隔离 |
+| `config/` | GTNHLib 配置注册、分类、客户端同步和路径 |
+| `market/definition/` | 读取、校验股票/模式 JSON，构造定义并编译表达式 |
+| `market/expression/` | 受限数学表达式语言、递归下降解析、变量作用域和函数 |
+| `market/order/` | 原型撮合订单簿、共享净仓账本、工作线程、行情机器人、保护单与净值迁移 |
+| `options/` | 原型欧式期权定价、报价、买入、到期与 Delta 计算 |
+| `market/engine/` | 模式选择、价格推进、运行状态和价格存储接口 |
+| `market/server/` | 服务器行情生命周期、tick/登录事件、文件存储和广播 |
+| `market/view/`、`network/` | 客户端公共行情视图、快照与增量价格消息 |
+| `trading/` | 持仓、杠杆规则、开平仓、强平、数学计算与存档 |
+| `wallet/`、`compat/` | 余额、兑换/还债、兑换来源接口和 GTNH 币适配 |
+| `item/ItemMarketTerminal`、`gui/WalletGui` | 投资终端和钱包的布局、交互与同步状态 |
+| `client/gui/`、`client/render/` | 客户端控件、须知窗口、图表和世界显示屏渲染 |
+| `block/`、`recipe/`、`util/` | 显示屏方块/TileEntity、合成配方与小型工具 |
+
+建议先读 `CommonProxy`，再按任务阅读服务、领域逻辑和界面。行情任务从 `MarketService → StockMarket → PriceEngine` 进入；交易任务从 `TradingService → TradingMath / Position` 进入；钱包任务从 `WalletService → ExchangeItems` 进入。
+
+其他重要路径：
+
+- `src/main/resources/nhkantan/defaults/`：打包进 JAR 的初始 `modes.json`、`stocks.json`，由服务端在文件缺失时复制。
+- `src/main/resources/assets/nhkantan/`：中英文本地化、物品/方块/UI 贴图。
+- `assets/market-configurator.html`：可离线使用的单文件网页配置器，含 JSON 编辑、校验与行情模拟。
+- `assets/modes.json`、`assets/stocks.json`：辅助示例；当前内容与打包默认配置并不完全相同，不要直接互相覆盖。
+- `docs/*.png`：界面截图，用于理解视觉风格；当前源码决定实际行为。
+
+## 3. 架构与业务规则（明确区分 realistic 与 legacy）
+
+### 服务端权威与同步
+
+- `CommonProxy` 默认启动 `RealisticService`，其持有单写者 `ExchangeRuntime`，主线程处理网络、世界与背包，工作线程处理撮合/账户/期权。未迁移且关闭新模式的世界才使用旧 `MarketService`、`WalletService`、`TradingService`；已经迁移的世界不允许回退旧模式。
+- 服务端持有真实价格、余额、持仓及行情公式。客户端只接收公共行情，并提交交易或兑换请求；必须在服务端重新验证价格、余额、持仓所有权、数量及杠杆限制。
+- 玩家登录时发送完整行情快照；每轮行情更新广播一批增量价格。终端和所有世界显示屏共用 `ClientMarketData`，不要给每块显示屏单独建立行情轮询。
+- 钱包和交易界面通过 ModularUI2 的 `PanelSyncManager` 同步余额、持仓和操作；不要假设所有操作都走 `network/` 下的两个行情消息。
+- 客户端渲染类由代理和 `@SideOnly` 隔离。不要让服务端加载路径直接引用 Minecraft 客户端类。
+- 服务端操作避免双重执行，尤其是单人游戏中两端共享进程的情况；复用 `GuiActions.serverClick` 等已有约定。
+
+### legacy 行情与公式（新模式由真实撮合产生 OHLCV）
+
+- `config/nh-kantan/nhkantan.cfg` 保存常规设置；同目录的 `modes.json` 与 `stocks.json` 保存行情定义，当前 schema 版本为 1。
+- 当前默认更新间隔为 40 tick，显示 50 根 K 线。配置注解及解析器是默认值和校验规则的来源。
+- 一步行情的顺序是：判断模式切换 → 用更新前上下文计算公式 → 将计算价限制到股票上下界 → 用同一份更新前上下文计算变量更新 → 提交状态。
+- 区分限幅前计算价与实际价；变量更新不能因遍历顺序而读到本轮其他变量的新值。
+- 公式语言是受限解析器，支持数学运算、内置函数和变量。扩展时同步检查 Java 解析器、网页配置器、示例和说明；两端应保持相同计算语义，不要承诺不同随机数生成器产生逐点相同的价格序列。
+- 定义无效时当前实现记录错误并禁用行情；单支股票计算产生非有限值时跳过该次更新并控制重复日志。不要悄悄把无效价格当正常价格传播。
+- 客户端每根 K 线由两次相邻价格生成，无影线；固定窗口中靠右排列，需要 N+1 个价格显示 N 根 K 线。
+
+### 金额、交易和债务
+
+- 金额使用 `long` 类型的“分”，`100` 分为 1 市场币；复用 `Money`、`TradingMath` 和饱和运算工具。不得把账户余额改成浮点累计。
+- 名义仓位 = 保证金 × 整数杠杆；开仓扣除保证金与手续费，平仓返还保证金加盈亏。不同金额操作的取整规则不同，修改前阅读现有实现。
+- 服务端校验玩家总持仓数、单股票持仓数、股票可交易状态及杠杆范围。股票可覆盖全局杠杆上下限。
+- 每轮价格更新检查强平。按实际价格结算，价格跳变可能造成负余额；不要擅自增加“亏损最多为保证金”的限制。
+- 负债时禁止普通存取和新开仓，只接受配置的还债物品；还款最多使余额归零，不能借还款生成正余额。
+- 兑换需要同时保持余额与物品的一致性；处理背包容量、面额拆分、无效物品，以及关闭钱包时归还临时槽物品。
+
+### 持久化与兼容性
+
+- realistic 账户按 UUID 保存在世界 `nhkantan/realistic.dat` 的统一版本化 NBT 检查点中，包含账本、订单、期权、去重序号及背包托管记录；`AtomicMarketStore` 原子替换，`RealisticSavedData` 为序列化桥，不交给会吞写盘异常的 MapStorage 重复写同一文件。旧模式的钱包和持仓使用全局 `WorldSavedData`。
+- 钱包存档保留从旧整币字段 `Balances` 迁移到 `BalancesCents` 的读取逻辑。
+- 每支股票的完整价格历史位于世界目录 `nhkantan/prices/<stockId>.prices`，使用大端 4 字节 float 追加记录；启动时修复末尾不完整记录，内存和客户端仅保留近期窗口。
+- **legacy 模式只恢复价格历史，不持久化当前模式、自定义变量、事件序号或随机状态。** 重启后从最近价格继续，并重新随机选模式。这与历史设计文档不同。
+- JSON 字段、股票 ID、NBT 键、持仓编码和网络消息变更都涉及兼容性。不得无迁移说明地破坏已有世界；股票 ID 还用于文件名，必须保留安全校验。
+
+## 4. UI 与代码规范
+
+- 游戏内 UI 使用 ModularUI2：保留灰色像素窗口、原版风格按钮/物品槽，以及深色行情面板。图表使用青绿色上涨、红色下跌和弱对比网格。
+- 终端布局：顶部标题/余额/钱包入口，左侧图表与持仓，右侧下单表单与股票列表。钱包布局：左侧余额/存取/背包，右侧兑换或还债列表。
+- 图表统一复用 `StockPanelRenderer`；`StockChartWidget` 和 `MarketDisplayRenderer` 负责适配 GUI/世界坐标，不应各复制一套行情渲染逻辑。
+- 复用 `gui/util/Widgets` 的间距、分组、文本及步进按钮；保留实时金额预览、最大数量、Shift 步进、滚动和随规则隐藏固定杠杆滑条等交互。
+- 新增用户可见文本同时维护 `zh_CN.lang` 和 `en_US.lang`，使用语言键，避免直接在 Java 布局中硬编码中文。
+- 网页配置器采用深色卡片和表单布局；它是独立工具，游戏界面不需要套用网页圆角样式。
+- 遵守 `.editorconfig`：UTF-8、LF、Java 四空格缩进，JSON/Markdown 等两空格缩进约定；格式由现有 Spotless/Checkstyle 配置决定。
+- 遵循现有业务命名、小方法、提前返回、明确的空值处理和英文 JavaDoc。UI 可以使用链式构建 API；业务校验留在服务层，数学计算尽量保持独立。
+- 现代语法不等于现代运行库：Jabel 输出面向 Java 8，新增代码不要直接依赖 Java 17/25 专属 API。
+- 优先局部修改；不要夹带依赖升级、全仓格式重排、无关架构重写，或为简单业务引入新框架。
+
+## 5. 开发与验证
+
+工具链由仓库固定：Gradle Wrapper 9.7.1、Gradle daemon Java 25；Jabel 编译使用 Java 17，旧版 Minecraft 运行使用 Java 8。以 `.java-version`、`gradle/gradle-daemon-jvm.properties`、Wrapper 和当前 convention 插件配置为准，不能只看系统 `java -version`。
+
+在仓库根目录运行：
+
+```bash
+# 本次云环境已有的可选激活脚本；其他环境应自行提供相同工具链。
+if [ -f /workspace/.cloud-setup/env.sh ]; then
+  source /workspace/.cloud-setup/env.sh
+fi
+bash gradlew --version
+bash gradlew --build-cache --console=plain setupCIWorkspace
+bash gradlew --build-cache --console=plain assemble
+bash gradlew --build-cache --console=plain build
+```
+
+- 使用 `bash gradlew`，当前跟踪的 Wrapper 没有执行位。`build` 包含构建与 Spotless/Checkstyle 检查，`assemble` 可单独定位打包问题。
+- 网络需要 GTNH Maven、Gradle/Maven 仓库、Forge/Mojang 等下载源；Java 需使用环境支持的代理和信任配置。失败时先诊断，不要关闭 TLS、签名或校验和验证，也不要自动升级构建插件。
+- 运行新原型应优先看 `specs/01-realistic/PROTOTYPE.md`，价格输入为整数 tick、钱包直接操作背包，新配置 `RealisticConfig` 默认开启；不再使用旧保证金金额/自选杠杆窗口。
+- 当前云环境的工具/缓存位于 `/workspace/.cloud-setup`，该路径在仓库外；其中的 `install.sh`、`env.sh` 和 `server-status.py` 是环境辅助文件，不是项目源码，也不保证其他机器存在。
+- 仅修改文档时核对事实、链接和 diff 即可。修改业务代码运行相关检查；修改交易、公式、金额或存档时增加有意义的边界/回归验证，先检查实际可用的测试设施。
+- 当前已有 `src/test` 中针对 market/order 和 options 的 JUnit 4 回归；执行测试后检查当次 XML 数量/失败结果。旧基线曾为 NO-SOURCE，不代表当前测试情况。不要跳过断言或删除检查来让构建变绿。
+
+服务器验证：
+
+```bash
+bash gradlew --build-cache --console=plain runServer
+# 服务器保持运行时，在另一个终端执行；仅适用于辅助脚本存在的云环境。
+python3 /workspace/.cloud-setup/server-status.py
+```
+
+- 先检查并保留 `run/server/` 中的 EULA、配置与世界。该云环境用户已同意 EULA；测试配置仅监听 `127.0.0.1:25565`，使用离线模式。不要将这些测试设置强加给已有服务器。
+- 等待 `Done (...)!`，确认 `nhkantan` 初始化和行情加载，执行真实状态请求并检查响应含目标模组；进程存在或端口打开不足以证明功能正常。
+- 完成后通过原终端 stdin 发送 `stop`，检查世界保存和 Gradle 退出状态。只停止自己启动的服务。
+- CoFH 的旧映射查找可能弹出文件选择器导致无显示环境失败。使用忽略的 `run/server/config/CodeChickenLib.cfg` 中的 `mappingDir` 指向含 `packaged.srg`、`fields.csv`、`methods.csv` 的 Forge `unpacked/conf`。当前云环境目录位于 `$GRADLE_USER_HOME/caches/minecraft/net/minecraftforge/forge/1.7.10-10.13.4.1614-1.7.10/unpacked/conf`。这是本地配置问题，不需要修改模组源码或用虚拟显示器掩盖它。
+- `runClient`、`setupDecompWorkspace` 按任务需要使用。UI 改动需检查缩放、空数据、切换股票、动态列表和客户端实际渲染；未运行客户端时明确说明未验证部分。
+- 保持 `git status` 可审阅，不提交 `build/`、`.gradle/`、`run/`、世界存档、日志和本机工具。云任务本身已隔离，使用现有 checkout，除非用户明确要求，不另建 worktree。
+
+## 6. 当前状态与已知限制
+
+最近已验证基线：2026-11-09，业务代码提交 `c0323f3`，Linux 云环境。此处是历史验证记录，不代表后续任意修改自动通过。
+
+- `setupCIWorkspace`、`assemble`、`build`、Spotless、Checkstyle 通过；重复安装/构建通过并复用了缓存。
+- 专用服务器两次启动、协议版本 5 的 Minecraft 1.7.10 状态查询和正常关闭通过；响应含 `nhkantan`，默认 6 种模式与 2 支股票加载成功。
+- 未验证图形客户端操作、真实玩家加入世界后的完整交易/兑换流程，或完整 GTNH 整合包兼容性。
+- 旧版 Forge ASM 5 扫描 ANTLR 的 Java 11 类和 JOML 的 Java 9 `module-info.class` 会产生“可能损坏 ZIP”的非致命错误；该次验证中两个 JAR 均匹配上游校验值且 ZIP CRC 正常。后续出现相似日志仍需核对，不能一律忽略。
+- 开发环境还有重映射签名提示、部分 GTNH 依赖的缺失配方/重复 trait 日志。服务器达到就绪并不等于启动日志无错误；新增或变化的错误应重新诊断。
+- 已新增核心 JUnit 4 回归，游戏接线与完整验收尚未完成；`ItemMarketTerminal`、`WalletGui` 同时包含布局与交互状态，服务间存在静态访问耦合。这些是当前维护特点，不是要求 agent 顺便重构的任务。
+- 不要宣称历史计划中的管理员指令、随机状态恢复、挂单、部分平仓、持仓费等功能已经实现；新增前先查源码和用户范围。
+
+## 7. Agent 必须动态维护本文件
+
+本文件是持续维护的项目入口。**改变相关事实时，必须在同一项任务中直接更新本文件，不能只在最终回复中建议“以后更新文档”。**
+
+1. 开始任务时阅读本文件，核对涉及模块的代码、配置和工作区状态。发现过时描述时，先确认事实，再修正文档；未知情况标为未验证，不编造现状。
+2. 以下变化必须检查并更新对应章节：功能范围、模块/入口/目录、服务端与客户端职责、行情或结算语义、配置 schema/默认值、存档与消息兼容性、UI 布局/交互/本地化、工具链/命令、测试设施及已知问题。
+3. 修改后记录实际验证范围：命令、结果及必要的环境/日期/代码基线。区分已通过、失败、跳过、`NO-SOURCE`、未执行；不因修改文档就重写旧验证日期。
+4. 解决已知问题后删除或改写过时限制；新发现的问题应说明触发条件、影响和已验证的规避方式。把计划与实现分开，用户决定才写成需求，不把推测变成路线图。
+5. 收尾时检查 `git diff`，确认代码、资源、本文件的描述一致，并在最终回复简述文档更新和未验证项。若事实未变，无需为每次任务制造文档改动。
+6. 保持文档精炼：更新原有章节，避免追加聊天记录、流水账、完整日志、凭据或不断增长的任务历史。保留稳定路径与可执行命令，使下一位 agent 可以从零接手。
+
+## 8. 01-realistic 实施中的确认
+
+用户已授权不兼容更新：清空旧交易/持仓/行情记录，仅保留净值。净值按旧钱包现金 + 旧仓保证金 + 最后有效价对应盈亏计算，不重复收取旧费用；缺有效价或数值溢出中止。先持久化新净值和迁移标记，再清旧记录。LegacyEquityMigration 负责纯计算，LegacyMigration 与 RealisticService 完成保存后清理；本轮在隔离世界验证，未迁移真人世界。不要实施旧模式门禁方案，也不要把新的纯 Java 核心误认为游戏功能已经接通。
+
+用户进一步确认新模式采用“品种固定保证金率 + 合约数量下单”，移除自选杠杆滑条。RealisticConfig、ExchangeRuntime、RequestJournal、SimulatedInstrument、TradeHistory、OptionMarket 和原子 NBT 存档桥均在开发中；开关默认开启，新入口已接线；旧路径只服务未迁移且显式关闭新模式的世界。最新核心构建与回归记录应以 tasks.md 为准。
+
+## 9. 原型阶段（最新用户要求）
+
+用户要求快速完成原型，然后集中一轮验证，交付后等待人工反馈；不要继续反复扩展测试或擅自进入下一轮打磨。realistic 原型现已接入生命周期、终端/钱包、共享 OHLCV、撮合、保护单、机器人和简化期权/对冲，默认开启。仅保留净值的不兼容迁移会在首次启动执行，已迁移世界不能退回旧模式。原型到期参考价采用到期前完整 OHLCV 桶的加权近似，非逐笔精确窗口；高级图表私人叠层/成交标记、完整历史归档及细粒度参数/风险模型尚需完善。不能将本原型声明为规格全部完成。最终验证结果见 specs/01-realistic/PROTOTYPE.md。
+
+原型最后一轮集中验证：2026-11-09，完整 build 与 27 项回归通过；隔离专用服务器真实撮合、状态请求和正常停机通过。真人 GUI、多人和完整期权周期未验证。已按用户要求暂停进一步修改与测试，等待人工反馈。
