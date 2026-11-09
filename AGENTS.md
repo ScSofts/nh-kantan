@@ -208,9 +208,9 @@ python3 /workspace/.cloud-setup/server-status.py
 
 - `MarketNotices` 为市场单写者维护的私人待确认队列，与账本同一检查点保存：止损首次触发、止盈首次真实成交、期权到期实际结算生成通知。重试/重复到期调用不再次生成；同一标的/到期日/轮次的期权结算在首次提供给客户端前合并。手动期权行权/平仓不额外弹此类到期通知。
 - `MarketNoticeMessage`（客户端 ID 4）仅发送给本人，`MarketNoticeAckMessage`（服务端 ID 5）以会话 generation 和认证 UUID 确认；每批最多 16 条，每玩家保留最近 64 条、全服最多 4096 条。未确认通知随存档保留，正常重登可补发；它不是完整历史归档。
-- `MarketNotifications` 使用 Forge/FML ClientTick/RenderTick 和 Minecraft 原版声音接口，在 GUI 绘制后叠加右上浮窗，5 秒/条；不注册伪成就、不切换屏幕。网络线程只入队，客户端 tick 处理筛选/音效/确认，断线清理。
-- 抑制条件：终端主面板真实打开且无覆盖弹窗，品种匹配，止盈止损处于交易页；到期通知则为对应标的的期权临期（1 天）页。钱包、其他品种/期限或关闭终端会提醒。显示前和浮窗显示期间均检查，匹配时静默确认，不在离页后补弹；集成服仅由逻辑客户端登记页面。
-- 新 JAR `build/libs/nhkantan-notifications.jar` 已通过 `spotlessApply assemble`。按用户要求未运行 Java 测试或 MC；实际浮窗/声音、页面切换、部分成交与离线重登仍需人工验收。不得将编译通过表述成通知已在真人游戏中验证。
+- `MarketNotifications` 在 FML 客户端 tick 将提醒交给 GTNH AE 的 `NotificationManager` / `Notification` 共用队列，复用 AE 合成完成浮窗，并播放原版音效；不再自行绘制浮窗。客户端可选反射桥 `AeMarketNotifications` 不引入 AE 硬依赖，缺少兼容 AE 时回退聊天和声音。收取私人通知不再依赖公共行情帧已经到达。
+- 用户最新要求取消所有页面抑制：终端是否打开、当前品种、交易/钱包/期权页和期限均不影响提醒。每个事件均通知，按事件编号去重，交付后确认；离线待确认事件登录后补发。移除页面追踪接口。
+- 最新产物 `build/libs/nhkantan-ae-notifications.jar`；仅 `spotlessApply assemble` 编译打包，按用户要求未运行 Java 测试或 MC。AE 浮窗/声音及重登需人工验收，不能将编译通过表述成真人游戏验证。
 
 ### 去插针与双实例流动性（2026-11-10）
 

@@ -113,8 +113,6 @@ public final class ExchangeGui implements IGuiHolder<GuiData> {
                 new Rectangle().color(0xFF3E638A)
                     .hollow(1))
             .child(layout);
-        if (data.getPlayer().worldObj.isRemote)
-            NHKantan.proxy.trackExchangeView(panel, () -> state.page, () -> state.selected, () -> state.expiryDay);
         return panel;
     }
 

@@ -34,12 +34,6 @@ public class ClientProxy extends CommonProxy {
     }
 
     @Override
-    public void trackExchangeView(com.cleanroommc.modularui.screen.ModularPanel panel,
-        java.util.function.IntSupplier page, Supplier<String> instrument, java.util.function.IntSupplier expiryDay) {
-        com.yuelengm.nhkantan.client.MarketNotifications.INSTANCE.track(panel, page, instrument, expiryDay);
-    }
-
-    @Override
     public Widget<?> createStockChart(Supplier<StockView> stock,
         Supplier<java.util.List<com.yuelengm.nhkantan.market.view.ChartLine>> lines) {
         return new StockChartWidget(stock, lines);
