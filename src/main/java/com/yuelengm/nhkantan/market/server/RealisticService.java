@@ -118,6 +118,18 @@ public final class RealisticService {
             settings.fairNoiseLimitMultiplier = RealisticConfig.fairNoiseLimitMultiplier;
 
             settings.jitter = RealisticConfig.intervalJitter;
+            settings.makerQuoteSizeMultiplier = RealisticConfig.makerQuoteSizeMultiplier;
+            settings.makerIntervalScale = RealisticConfig.makerIntervalScale;
+            settings.whaleMaxOrderContracts = RealisticConfig.whaleMaxOrderContracts;
+            settings.makerSpreadBps = RealisticConfig.makerSpreadBps;
+            settings.makerInventorySkewBps = RealisticConfig.makerInventorySkewBps;
+            settings.makerRepriceBpsPerSecond = RealisticConfig.makerRepriceBpsPerSecond;
+            settings.automatedQuoteBandBps = RealisticConfig.automatedQuoteBandBps;
+            settings.automatedQuoteLifetimeTicks = Math
+                .multiplyExact(RealisticConfig.automatedQuoteLifetimeSeconds, 20L);
+            settings.botMaxSlippageBps = RealisticConfig.botMaxSlippageBps;
+            settings.botMaxLiquidityFraction = RealisticConfig.botMaxLiquidityFraction;
+
             settings.regimeMinSteps = Math.multiplyExact(RealisticConfig.regimeMinSeconds, 10);
             settings.regimeMaxSteps = Math.multiplyExact(RealisticConfig.regimeMaxSeconds, 10);
             settings.trendMoveBps = RealisticConfig.trendMoveBps;

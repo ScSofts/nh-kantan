@@ -62,7 +62,10 @@ def normalize(raw):
     warnings = []
     bounds = dict(regimeMinSeconds=(2,3600), regimeMaxSeconds=(2,3600), fairAverageSeconds=(1,3600),
                   trendMoveBps=(0,5000), breakoutMoveBps=(0,10000), tickValueCents=(1,1000000),
-                  initialMarginBps=(1,10000), maintenanceMarginBps=(0,10000), commissionPpm=(0,1000000),
+                  makerSpreadBps=(1,200), makerInventorySkewBps=(0,100), makerRepriceBpsPerSecond=(1,1000),
+                  automatedQuoteBandBps=(1,1000), automatedQuoteLifetimeSeconds=(1,60), botMaxSlippageBps=(1,500),
+                  botMaxLiquidityFraction=(.01,1), makerQuoteSizeMultiplier=(1,100), makerIntervalScale=(.05,2),
+                  whaleMaxOrderContracts=(1,100000), initialMarginBps=(1,10000), maintenanceMarginBps=(0,10000), commissionPpm=(0,1000000),
                   maxPosition=(1,1000000), depth=(1,100), botOrderSize=(1,10000), botInitialCash=(1,100000000),
                   institutionalCapitalMultiplier=(1,1000), institutionalOrderMultiplier=(1,100),
                   institutionalPositionLimit=(1000,1000000), intervalJitter=(0,1), fairVolatilityTicks=(0,10000),
@@ -81,6 +84,13 @@ def normalize(raw):
     if c['maintenanceMarginBps'] > c['initialMarginBps']:
         c['maintenanceMarginBps'] = c['initialMarginBps'] // 2
         warnings.append('maintenance margin corrected')
+    minimum_band=max(c['makerSpreadBps'],c['botMaxSlippageBps'])
+    if c['automatedQuoteBandBps']<minimum_band:
+        c['automatedQuoteBandBps']=minimum_band
+        warnings.append('automated quote band widened for spread/slippage')
+    if c.get('botCounts')==[3,4,4,8,1]:
+        c['botCounts']=[2,2,2,2,2]
+        warnings.append('legacy default institution counts migrated to pairs')
     for name, lo, hi in [('botCounts',0,100),('botIntervalsMillis',100,86400000),('botProbabilities',0,1)]:
         values = c[name] if isinstance(c.get(name),list) else []
         fixed = [values[i] if i<len(values) and isinstance(values[i],(int,float))

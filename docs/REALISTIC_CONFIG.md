@@ -48,3 +48,26 @@ python3 tools/simulate_market.py --config /path/to/nhkantan.cfg
 报告在 `build/reports/python-market/`（指定配置时可用 `--output` 另选目录），包含参考序列 CSV、阶段切换、有效配置和摘要。默认验证 16 个种子、各 30 分钟，覆盖六种状态、序列化恢复和非法配置归一化。VWAP 反馈使用 Python 参考序列和代理成交量，不等同于 Minecraft 内的完整撮合验证。
 
 本轮 Java 只执行 `bash gradlew --console=plain spotlessApply assemble`。没有运行 JUnit、runServer 或 runClient，最终进入存档和交易体验由用户验证。
+
+## 盘口加厚、去插针与双实例
+
+默认五类策略各运行两个实例，原来的默认 `botCounts=[3,4,4,8,1]` 会在内存中自动迁移为 `[2,2,2,2,2]`；其他自定义数量保留。每类快/慢两个实例有不同的节奏（0.85/1.15 倍）、数量（0.8/1.2 倍）和随机流；趋势窗口分别为 3–8 / 8–17 根，回归窗口为 5–12 / 12–23 根，噪声市价概率为 65% / 40%，做市价差系数为 0.9 / 1.15。
+
+| 参数 | 默认 | 作用 |
+| --- | --- | --- |
+| `makerQuoteSizeMultiplier` | 10 | 只把做市被动挂单再加厚 10 倍，普通主动单不一起放大 |
+| `makerIntervalScale` | 0.4 | 原 500ms 基准约变为 200ms，再叠加快/慢实例节奏、抖动与工作线程粒度 |
+| `whaleMaxOrderContracts` | 5000 | 巨鲸单次硬上限，包含突破期的放大后数量 |
+| `makerSpreadBps` | 10 | 基础买卖总价差，随后加盘口档位距离 |
+| `makerInventorySkewBps` | 5 | 库存偏移上限，并额外限制在半价差以内，避免大库存把报价推远 |
+| `makerRepriceBpsPerSecond` | 120 | 共同报价参考每活动秒最多跟随约 1.2%；保留突破跟随能力 |
+| `automatedQuoteBandBps` | 30 | 偏离共同参考的过时机器人挂单退出，另有最小 tick/档位宽度底线 |
+| `automatedQuoteLifetimeSeconds` | 2 | 机器人被动挂单有效期；玩家 GTC 不受此项影响 |
+| `botMaxSlippageBps` | 20 | 机器人/期权对冲 IOC 最差价保护，另有最小 tick/档位底线 |
+| `botMaxLiquidityFraction` | 0.25 | 一次机器人主动单最多按估计对手盘可成交深度的 25% 下单 |
+
+默认做市单目标约为 2400–10800 张/档（两实例分别约 2400–7200 / 3600–10800），受机构资金和限仓约束。趋势/突破阶段参数未降低；报价参考加速跟随到 120bps/秒，避免通过把市场压平来消除影线。上述保护约束单次报价和机器人订单，**不限制一段趋势的累计涨跌幅**。
+
+机器人不再无保护扫到品种价格上下界，旧机器人挂单在恢复后重新报价；清理只识别确定性的机器人 UUID，不撤玩家挂单。撮合仍按真实对手价成交，OHLC 高低价不做裁剪。旧的插针历史会随新行情自然滚出窗口，通常需要约一两分钟。
+
+Python 撮合对照：`PYTHONDONTWRITEBYTECODE=1 python3 tools/simulate_microstructure.py`。默认对照旧组合与新组合，4 个种子各 10 分钟，报告在 `build/reports/microstructure/`。按“单侧影线至少 30bps 且至少为实体 3 倍”统计，异常长影线 102→0；新组合每 10 分钟模拟成交约 878–1019 万张，较大实体幅度（95%分位）仍约 1.73%–2.03%。这不是 Java/MC 实测，模型未完整接入保证金/手续费账本；本轮仍只编译打包，交由用户人工体验。

@@ -119,3 +119,18 @@ Java 接入原硬编码的动态参数并修复配置交叉校验；市场启动
 构建：`bash gradlew --console=plain spotlessApply assemble` 成功；未运行 Java 测试、runServer 或 runClient。实际声音、浮窗、界面抑制及离线重登由用户人工体验。本轮未改变行情算法、交易和到期付款口径。
 
 体验 JAR：`build/libs/nhkantan-notifications.jar`。SHA-256：`773cdc3f7f4d2f68c0dc6058d8be1afae75f93f885f190fa318920167e9fbb26`。
+
+## 去插针、盘口加厚和双实例（2026-11-10）
+
+按用户最新反馈，从微观报价/流动性机制减少异常长影线：
+
+- 每类默认两个实例，分别采用快/慢节奏、0.8/1.2 倍规模及不同观察窗口/市价概率/价差；原默认机器人数量自动迁移，其他自定义配置保留。
+- 做市单额外放大 10 倍，基础行动间隔乘 0.4（原 500ms 约变 200ms，另有实例节奏、抖动与工作线程粒度）；默认目标约 2400–10800 张/档。巨鲸单次最大 5000 张，包含突破放大后。
+- 公共报价参考平滑跟随，库存偏移受价差约束；过期和远离参考的机器人委托退出。玩家挂单保留，撮合价格与 OHLC 高低价不裁剪。机器人 IOC 有价格保护和每次 25% 盘口深度估计上限，期权对冲也不再无保护扫单。
+- 趋势/突破参数未降低；报价中心跟随上限为 120bps/活动秒，持续行情仍可大幅移动。旧的插针历史自然滚出，不重写存档。
+
+Python 先行对照采用简化价格/时间订单簿和机构模型：4 个种子各 10 分钟，共每组 1200 根两秒 K 线。统一判据“单侧影线≥30bps 且≥实体3倍”下，旧组合 102 根、新组合 0 根；新组合成交约 878–1019 万张/10分钟，实体幅度95%分位约 1.73%–2.03%。报告 `build/reports/microstructure/summary.json`、原始 OHLCV CSV 和 `wick-comparison.png`；不等同于 Java/完整保证金账本或 MC 实测。
+
+`bash gradlew --console=plain spotlessApply assemble` 通过；未运行 Java 测试、runServer、runClient。配置说明见 `../../docs/REALISTIC_CONFIG.md`，实际盘口、声音提醒及玩家操作留待人工反馈。
+
+新 JAR：`build/libs/nhkantan-liquidity-fix.jar`，SHA-256 `14febd236e8b36130cdea2f0fdee038ea28daec19bff3a6a7f15d66239dccacd`。
