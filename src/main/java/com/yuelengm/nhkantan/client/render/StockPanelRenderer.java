@@ -1,5 +1,6 @@
 package com.yuelengm.nhkantan.client.render;
 
+import java.util.Collections;
 import java.util.List;
 
 import javax.annotation.Nullable;
@@ -11,6 +12,7 @@ import net.minecraft.util.StatCollector;
 import org.lwjgl.opengl.GL11;
 
 import com.yuelengm.nhkantan.market.view.Candle;
+import com.yuelengm.nhkantan.market.view.ChartLine;
 import com.yuelengm.nhkantan.market.view.PriceFormat;
 import com.yuelengm.nhkantan.market.view.StockView;
 
@@ -19,8 +21,8 @@ import com.yuelengm.nhkantan.market.view.StockView;
  * system, which must have +X to the right and +Y downward.
  * <p>
  * Shared by the in-world display (block units) and the terminal GUI (GUI pixels): callers only choose the size of one
- * font pixel ({@code unit}) and the depth step between layers. The horizontal axis is fixed to the window capacity, so
- * candles fill from the right and older history is never shown.
+ * font pixel ({@code unit}) and the depth step between layers. Terminals may select a recent viewport and private
+ * annotations; world displays retain the full anonymous public window.
  */
 public class StockPanelRenderer {
 
@@ -36,7 +38,7 @@ public class StockPanelRenderer {
     private static final int GRID_LEVELS = 5;
     private static final float PADDING = 4.0F;
     private static final float LINE_GAP = 2.0F;
-    private static final float BODY_RATIO = 0.6F;
+    private static final float BODY_RATIO = 0.72F;
     private static final float DASH = 3.0F;
     private static final float DASH_GAP = 2.0F;
 
@@ -49,6 +51,23 @@ public class StockPanelRenderer {
      */
     public static void draw(FontRenderer font, @Nullable StockView stock, float x, float y, float width, float height,
         float unit, float z, float zStep) {
+        draw(
+            font,
+            stock,
+            x,
+            y,
+            width,
+            height,
+            unit,
+            z,
+            zStep,
+            stock == null ? 30 : stock.candleSlots(),
+            0,
+            Collections.emptyList());
+    }
+
+    public static void draw(FontRenderer font, @Nullable StockView stock, float x, float y, float width, float height,
+        float unit, float z, float zStep, int visibleSlots, int offset, List<ChartLine> lines) {
         Tessellator tessellator = Tessellator.instance;
         GL11.glDisable(GL11.GL_TEXTURE_2D);
         tessellator.startDrawingQuads();
@@ -88,20 +107,37 @@ public class StockPanelRenderer {
             colorOf(change));
 
         float chartTop = y + pad + lineHeight * 2.0F + pad;
-        drawChart(font, stock, x + pad, chartTop, right, y + height - pad, unit, z + zStep, zStep);
+        drawChart(
+            font,
+            stock,
+            x + pad,
+            chartTop,
+            right,
+            y + height - pad,
+            unit,
+            z + zStep,
+            zStep,
+            visibleSlots,
+            offset,
+            lines);
         GL11.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
     }
 
     private static void drawChart(FontRenderer font, StockView stock, float x0, float y0, float x1, float y1,
-        float unit, float z, float zStep) {
-        List<Candle> candles = stock.candles();
+        float unit, float z, float zStep, int slots, int offset, List<ChartLine> lines) {
+        List<Candle> all = stock.candles();
+        slots = Math.max(1, slots);
+        int candleEnd = Math.max(0, all.size() - Math.max(0, offset));
+        List<Candle> candles = all.subList(Math.max(0, candleEnd - slots), candleEnd);
         double min = stock.price();
         double max = stock.price();
         for (Candle candle : candles) {
             min = Math.min(min, candle.low());
             max = Math.max(max, candle.high());
         }
-        double padding = Math.max((max - min) * 0.08D, Math.abs(max) * 0.005D);
+        double padding = Math.max(
+            (max - min) * 0.12D,
+            stock.isExchange() ? Math.max(0.01D, Math.abs(max) * 0.00005D) : Math.abs(max) * 0.005D);
         min -= padding;
         max += padding;
 
@@ -123,15 +159,15 @@ public class StockPanelRenderer {
             float gy = y0 + (priceBottom - y0) * i / (GRID_LEVELS - 1);
             quad(tessellator, x0, gy, plotRight, gy + unit * 0.5F, z, COLOR_GRID);
         }
-        drawCandles(tessellator, candles, stock.candleSlots(), scale, x0, plotRight, unit, z + zStep);
+        drawCandles(tessellator, candles, slots, scale, x0, plotRight, unit, z + zStep);
         if (stock.isExchange()) {
             long maxVolume = 1;
             for (Candle candle : candles) maxVolume = Math.max(maxVolume, candle.volume());
-            float slot = (plotRight - x0) / stock.candleSlots();
-            int offset = stock.candleSlots() - candles.size();
+            float slot = (plotRight - x0) / slots;
+            int first = slots - candles.size();
             for (int i = 0; i < candles.size(); i++) {
                 Candle candle = candles.get(i);
-                float left = x0 + (offset + i) * slot;
+                float left = x0 + (first + i) * slot;
                 float height = (y1 - priceBottom) * 0.8F * candle.volume() / maxVolume;
                 quad(
                     tessellator,
@@ -141,6 +177,12 @@ public class StockPanelRenderer {
                     y1,
                     z,
                     candle.isRising() ? COLOR_UP : COLOR_DOWN);
+            }
+        }
+        for (ChartLine line : lines) {
+            float ly = Math.max(y0 + halfLine, Math.min(priceBottom - halfLine, scale.y(line.price)));
+            for (float dx = x0; dx < plotRight; dx += 7 * unit) {
+                quad(tessellator, dx, ly, Math.min(dx + 5 * unit, plotRight), ly + unit * 0.6F, z + zStep, line.color);
             }
         }
         float priceY = scale.y(stock.price());
@@ -153,6 +195,22 @@ public class StockPanelRenderer {
         tessellator.draw();
         GL11.glEnable(GL11.GL_TEXTURE_2D);
 
+        java.util.List<float[]> occupied = new java.util.ArrayList<>();
+        for (ChartLine line : lines) {
+            float actual = scale.y(line.price);
+            float ly = Math.max(y0 + halfLine, Math.min(priceBottom - halfLine, actual));
+            for (float[] used : occupied) {
+                if (Math.abs(ly - used[0]) < (font.FONT_HEIGHT + 2) * unit)
+                    ly = used[0] + (font.FONT_HEIGHT + 2) * unit;
+            }
+            ly = Math.min(priceBottom - halfLine, ly);
+            occupied.add(new float[] { ly });
+            String edge = actual < y0 ? "^ " : actual > priceBottom ? "v " : "";
+            String label = edge + line.label + " " + PriceFormat.price(line.price, decimals);
+            if (font.getStringWidth(label) * unit > plotRight - x0)
+                label = font.trimStringToWidth(label, Math.max(1, (int) ((plotRight - x0) / unit)));
+            text(font, label, x0 + 2 * unit, ly - halfLine, unit, textZ, line.color);
+        }
         for (int i = 0; i < GRID_LEVELS; i++) {
             float gy = y0 + (priceBottom - y0) * i / (GRID_LEVELS - 1);
             // Skip grid labels that would overlap the current price tag
@@ -171,8 +229,7 @@ public class StockPanelRenderer {
     }
 
     /**
-     * Candles are right-aligned in a fixed number of slots. Each candle spans two consecutive prices, so it has no
-     * wicks.
+     * Draws right-aligned OHLC bodies and high/low wicks in the chosen viewport.
      */
     private static void drawCandles(Tessellator tessellator, List<Candle> candles, int slots, PriceScale scale,
         float x0, float x1, float unit, float z) {

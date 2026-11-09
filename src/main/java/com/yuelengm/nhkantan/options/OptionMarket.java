@@ -11,7 +11,10 @@ import java.util.UUID;
 import com.google.gson.Gson;
 import com.yuelengm.nhkantan.market.order.MarginLedger;
 
-/** Writer-only European option contracts and positions; shares the exchange cash ledger and save barrier. */
+/**
+ * Writer-only cash-settled options with early exercise and market-maker buyback; shares the exchange cash ledger and
+ * save barrier.
+ */
 public final class OptionMarket {
 
     public static final class Contract {
@@ -51,14 +54,17 @@ public final class OptionMarket {
         public final String contract;
         public final long validUntilMillis;
         public final long unitCents;
+        public final long bidUnitCents;
         public final double theoretical;
         public final double delta;
 
-        private Quote(long id, Contract contract, long deadline, long unitCents, OptionPricing.Value value) {
+        private Quote(long id, Contract contract, long deadline, long unitCents, long bidUnitCents,
+            OptionPricing.Value value) {
             this.id = id;
             this.contract = contract.id;
             validUntilMillis = deadline;
             this.unitCents = unitCents;
+            this.bidUnitCents = bidUnitCents;
             theoretical = value.premium;
             delta = value.delta;
         }
@@ -73,6 +79,7 @@ public final class OptionMarket {
         public final long costCents;
         private boolean settled;
         private long payoutCents;
+        private long closedQuantity;
 
         private Holding(long id, UUID owner, String contract, long quantity, long costCents) {
             this.id = id;
@@ -86,6 +93,18 @@ public final class OptionMarket {
             this(source.id, source.owner, source.contract, source.quantity, source.costCents);
             settled = source.settled;
             payoutCents = source.payoutCents;
+            closedQuantity = source.closedQuantity;
+        }
+
+        public long remainingQuantity() {
+            return settled ? 0 : quantity - closedQuantity;
+        }
+
+        public long remainingCostCents() {
+            return java.math.BigInteger.valueOf(costCents)
+                .multiply(java.math.BigInteger.valueOf(remainingQuantity()))
+                .divide(java.math.BigInteger.valueOf(quantity))
+                .longValueExact();
         }
 
         public boolean settled() {
@@ -134,10 +153,16 @@ public final class OptionMarket {
         OptionPricing.Value value = OptionPricing
             .value(contract.kind, spot, contract.strike, contract.expiryTick - gameTick, iv);
         long cents = OptionPricing.askCents(value.premium, markup, minimumMarkup, contract.multiplier, 1);
-        Quote quote = new Quote(nextQuote++, contract, Math.addExact(marketMillis, validMillis), cents, value);
+        double spread = Math.max(value.premium * markup, minimumMarkup);
+        long bid = java.math.BigDecimal.valueOf(Math.max(0, value.premium - spread))
+            .multiply(java.math.BigDecimal.valueOf(contract.multiplier))
+            .movePointRight(2)
+            .setScale(0, java.math.RoundingMode.FLOOR)
+            .longValueExact();
+        Quote quote = new Quote(nextQuote++, contract, Math.addExact(marketMillis, validMillis), cents, bid, value);
         quotes.put(id, quote);
         validQuotes.put(quote.id, quote);
-        while (validQuotes.size() > 1024) validQuotes.remove(
+        while (validQuotes.size() > 8192) validQuotes.remove(
             validQuotes.keySet()
                 .iterator()
                 .next());
@@ -158,7 +183,8 @@ public final class OptionMarket {
         }
         long owned = 0;
         for (Holding holding : holdings) {
-            if (!holding.settled && holding.owner.equals(owner)) owned = Math.addExact(owned, holding.quantity);
+            if (!holding.settled && holding.owner.equals(owner))
+                owned = Math.addExact(owned, holding.remainingQuantity());
         }
         if (Math.addExact(owned, quantity) > accountLimit) throw new IllegalArgumentException("Option position limit");
         long cost = Math.multiplyExact(quote.unitCents, quantity);
@@ -168,6 +194,63 @@ public final class OptionMarket {
         nextHolding++;
         holdings.add(holding);
         return new Holding(holding);
+    }
+
+    public Holding holding(UUID owner, long id) {
+        for (Holding holding : holdings)
+            if (holding.id == id && holding.owner.equals(owner)) return new Holding(holding);
+        throw new IllegalArgumentException("Unknown option holding");
+    }
+
+    private Holding requireOpen(UUID owner, long id, long quantity, long gameTick) {
+        for (Holding holding : holdings) if (holding.id == id && holding.owner.equals(owner)) {
+            if (quantity < 1 || quantity > holding.remainingQuantity()
+                || gameTick >= requireContract(holding.contract).expiryTick)
+                throw new IllegalArgumentException("Option is closed, expired or quantity invalid");
+            return holding;
+        }
+        throw new IllegalArgumentException("Unknown option holding");
+    }
+
+    public Holding close(UUID owner, long holdingId, long quantity, long quoteId, long minimumPayout, long gameTick,
+        long marketMillis) {
+        Holding holding = requireOpen(owner, holdingId, quantity, gameTick);
+        Quote quote = validQuotes.get(quoteId);
+        if (quote == null || !quote.contract.equals(holding.contract) || marketMillis >= quote.validUntilMillis)
+            throw new IllegalArgumentException("Buyback quote expired");
+        return finishExit(holding, quantity, Math.multiplyExact(quote.bidUnitCents, quantity), minimumPayout);
+    }
+
+    public Holding exercise(UUID owner, long holdingId, long quantity, double spot, long minimumPayout, long gameTick) {
+        Holding holding = requireOpen(owner, holdingId, quantity, gameTick);
+        long payout = intrinsicCents(requireContract(holding.contract), spot, quantity);
+        if (payout == 0) throw new IllegalArgumentException("Exercise has no intrinsic value");
+        return finishExit(holding, quantity, payout, minimumPayout);
+    }
+
+    private Holding finishExit(Holding holding, long quantity, long payout, long minimumPayout) {
+        if (minimumPayout < 0 || payout < minimumPayout)
+            throw new IllegalArgumentException("Payout below accepted amount");
+        long total = Math.addExact(holding.payoutCents, payout);
+        long closed = Math.addExact(holding.closedQuantity, quantity);
+        ledger.credit(holding.owner, payout);
+        holding.payoutCents = total;
+        holding.closedQuantity = closed;
+        holding.settled = closed == holding.quantity;
+        return new Holding(holding);
+    }
+
+    public static long intrinsicCents(Contract contract, double spot, long quantity) {
+        if (!Double.isFinite(spot) || spot <= 0 || quantity < 1) throw new IllegalArgumentException("Invalid exercise");
+        java.math.BigDecimal intrinsic = java.math.BigDecimal.valueOf(spot)
+            .subtract(java.math.BigDecimal.valueOf(contract.strike));
+        if (contract.kind == OptionPricing.Kind.PUT) intrinsic = intrinsic.negate();
+        return intrinsic.max(java.math.BigDecimal.ZERO)
+            .multiply(java.math.BigDecimal.valueOf(contract.multiplier))
+            .multiply(java.math.BigDecimal.valueOf(quantity))
+            .movePointRight(2)
+            .setScale(0, java.math.RoundingMode.FLOOR)
+            .longValueExact();
     }
 
     /** Adapter supplies an already-frozen expiry-window reference, never a post-expiry current price. */
@@ -181,20 +264,13 @@ public final class OptionMarket {
             throw new IllegalArgumentException("Expiry price is already frozen");
         }
         settlementPrices.put(id, frozenExpiryPrice);
-        java.math.BigDecimal intrinsic = java.math.BigDecimal.valueOf(frozenExpiryPrice)
-            .subtract(java.math.BigDecimal.valueOf(contract.strike));
-        if (contract.kind == OptionPricing.Kind.PUT) intrinsic = intrinsic.negate();
-        intrinsic = intrinsic.max(java.math.BigDecimal.ZERO);
         for (Holding holding : holdings) {
             if (!holding.contract.equals(id) || holding.settled) continue;
-            long payout = intrinsic.multiply(java.math.BigDecimal.valueOf(contract.multiplier))
-                .multiply(java.math.BigDecimal.valueOf(holding.quantity))
-                .movePointRight(2)
-                .setScale(0, java.math.RoundingMode.FLOOR)
-                .longValueExact();
-            ledger.credit(holding.owner, payout);
-            holding.payoutCents = payout;
-            holding.settled = true;
+            finishExit(
+                holding,
+                holding.remainingQuantity(),
+                intrinsicCents(contract, frozenExpiryPrice, holding.remainingQuantity()),
+                0);
         }
         quotes.remove(id);
     }
@@ -222,7 +298,7 @@ public final class OptionMarket {
         for (Holding holding : holdings) {
             Contract contract = requireContract(holding.contract);
             if (holding.settled || !contract.underlying.equals(underlying) || gameTick >= contract.expiryTick) continue;
-            delta += holding.quantity * contract.multiplier
+            delta += holding.remainingQuantity() * contract.multiplier
                 * OptionPricing.value(contract.kind, spot, contract.strike, contract.expiryTick - gameTick, iv).delta;
         }
         if (!Double.isFinite(delta)) throw new IllegalArgumentException("Delta exceeds numeric limits");
@@ -272,9 +348,14 @@ public final class OptionMarket {
                 || holding.quantity <= 0
                 || holding.costCents < 0
                 || holding.payoutCents < 0
+                || holding.closedQuantity < 0
+                || holding.closedQuantity > holding.quantity
+                || (!holding.settled && holding.closedQuantity == holding.quantity)
                 || !ledger.hasAccount(holding.owner)
                 || !market.contracts.containsKey(holding.contract))
                 throw new IllegalArgumentException("Invalid option holding");
+            // Old settled records had no partial-close counter.
+            if (holding.settled) holding.closedQuantity = holding.quantity;
             market.holdings.add(new Holding(holding));
             previous = holding.id;
         }

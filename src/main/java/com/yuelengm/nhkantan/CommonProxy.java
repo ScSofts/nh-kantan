@@ -82,6 +82,11 @@ public class CommonProxy {
      * Creates the K-line chart widget used by market GUIs. The chart draws with client-only classes, so the common
      * proxy returns an empty placeholder and only the client proxy creates the real widget.
      */
+    public Widget<?> createStockChart(Supplier<StockView> stock,
+        Supplier<java.util.List<com.yuelengm.nhkantan.market.view.ChartLine>> lines) {
+        return IKey.EMPTY.asWidget();
+    }
+
     public Widget<?> createStockChart(Supplier<StockView> stock) {
         return IKey.EMPTY.asWidget();
     }

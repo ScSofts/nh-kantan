@@ -88,7 +88,7 @@ public final class RealisticService {
             settings.botCashCents = Math.multiplyExact(RealisticConfig.botInitialCash, 100L);
             settings.depth = RealisticConfig.depth;
             settings.baseOrderSize = RealisticConfig.botOrderSize;
-            settings.volatility = RealisticConfig.fairVolatilityTicks;
+            settings.volatility = RealisticConfig.fairVolatilityTicks * RealisticConfig.volatilityMultiplier;
             settings.impact = RealisticConfig.flowImpact;
             settings.jitter = RealisticConfig.intervalJitter;
             settings.historyCapacity = MarketConfig.visibleCandles;
@@ -238,6 +238,19 @@ public final class RealisticService {
         return frame;
     }
 
+    /** Keep ModularUI's bounded string packet small: send only the selected expiry chain. */
+    public String privateView(EntityPlayerMP player, String underlying, int day) {
+        return com.yuelengm.nhkantan.market.view.OptionChainView.filter(privateView(player), underlying, day, gameTick);
+    }
+
+    public long balance(EntityPlayerMP player) {
+        com.google.gson.JsonObject cached = new com.google.gson.JsonParser().parse(privateView(player))
+            .getAsJsonObject();
+        return cached.has("account") ? cached.getAsJsonObject("account")
+            .get("cash")
+            .getAsLong() : 0;
+    }
+
     public String privateView(EntityPlayerMP player) {
         return privateViews.getOrDefault(player.getUniqueID(), "{}");
     }
@@ -249,6 +262,11 @@ public final class RealisticService {
             .submit(generation, player.getUniqueID(), requestId, instrument, side, price, quantity, market, reduceOnly);
     }
 
+    public CompletableFuture<Boolean> closePosition(EntityPlayerMP player, UUID generation, long request, String id) {
+        requireActive();
+        return runtime.closePosition(generation, player.getUniqueID(), request, id);
+    }
+
     public CompletableFuture<Boolean> cancel(EntityPlayerMP player, UUID generation, String instrument, long id) {
         requireActive();
         return runtime.cancel(generation, player.getUniqueID(), instrument, id);
@@ -258,6 +276,13 @@ public final class RealisticService {
         UUID epoch, long request, String contract, long quote, long quantity, long maximumCost) {
         requireActive();
         return runtime.buyOption(epoch, player.getUniqueID(), request, contract, quote, quantity, maximumCost);
+    }
+
+    public CompletableFuture<com.yuelengm.nhkantan.options.OptionMarket.Holding> exitOption(EntityPlayerMP player,
+        UUID generation, long request, long holding, long quantity, boolean exercise, long quote, long minimumPayout) {
+        requireActive();
+        return runtime
+            .exitOption(generation, player.getUniqueID(), request, holding, quantity, exercise, quote, minimumPayout);
     }
 
     public CompletableFuture<Void> protect(EntityPlayerMP player, UUID generation, long requestId, String instrument,

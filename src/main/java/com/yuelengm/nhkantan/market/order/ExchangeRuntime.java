@@ -19,9 +19,13 @@ public final class ExchangeRuntime implements AutoCloseable {
         public final MarginLedger.AccountView account;
         public final java.util.List<OptionMarket.Contract> contracts;
         public final Map<String, OptionMarket.Quote> quotes;
+        public final Map<String, OptionMarket.Contract> holdingContracts;
+        public final Map<String, OptionMarket.Quote> holdingQuotes;
         public final java.util.List<OptionMarket.Holding> options;
         public final Map<String, MarginLedger.Position> positions;
         public final Map<String, java.util.List<OrderBook.Order>> orders;
+        public final Map<String, SimulatedInstrument.Protection> protections;
+        public final java.util.Set<String> closing;
 
         private PrivateSnapshot(ExchangeRuntime runtime, UUID owner) {
             generation = runtime.generation;
@@ -30,10 +34,24 @@ public final class ExchangeRuntime implements AutoCloseable {
             contracts = runtime.options.contracts();
             quotes = runtime.options.quotes();
             options = runtime.options.holdings(owner);
+            Map<String, OptionMarket.Contract> ownedContracts = new LinkedHashMap<>();
+            Map<String, OptionMarket.Quote> ownedQuotes = new LinkedHashMap<>();
+            java.util.Set<String> ownedIds = new java.util.HashSet<>();
+            for (OptionMarket.Holding holding : options) ownedIds.add(holding.contract);
+            for (OptionMarket.Contract contract : contracts) if (ownedIds.contains(contract.id)) {
+                ownedContracts.put(contract.id, contract);
+                if (quotes.containsKey(contract.id)) ownedQuotes.put(contract.id, quotes.get(contract.id));
+            }
+            holdingContracts = Collections.unmodifiableMap(ownedContracts);
+            holdingQuotes = Collections.unmodifiableMap(ownedQuotes);
+            Map<String, SimulatedInstrument.Protection> protectedPositions = new LinkedHashMap<>();
             Map<String, MarginLedger.Position> held = new LinkedHashMap<>();
             Map<String, java.util.List<OrderBook.Order>> working = new LinkedHashMap<>();
             for (Map.Entry<String, SimulatedInstrument> entry : runtime.instruments.entrySet()) {
                 held.put(entry.getKey(), runtime.ledger.position(owner, entry.getKey()));
+                SimulatedInstrument.Protection protection = entry.getValue()
+                    .protection(owner);
+                if (protection != null) protectedPositions.put(entry.getKey(), protection);
                 working.put(
                     entry.getKey(),
                     entry.getValue()
@@ -41,6 +59,11 @@ public final class ExchangeRuntime implements AutoCloseable {
             }
             positions = Collections.unmodifiableMap(held);
             orders = Collections.unmodifiableMap(working);
+            protections = Collections.unmodifiableMap(protectedPositions);
+            java.util.Set<String> pending = new java.util.LinkedHashSet<>();
+            for (Map.Entry<String, Map<UUID, Integer>> entry : runtime.closing.entrySet()) if (entry.getValue()
+                .containsKey(owner)) pending.add(entry.getKey());
+            closing = Collections.unmodifiableSet(pending);
         }
     }
 
@@ -70,6 +93,7 @@ public final class ExchangeRuntime implements AutoCloseable {
         private Map<String, String> instruments;
         private Map<UUID, Long> requests;
         private String options;
+        private Map<String, Map<UUID, Integer>> closing;
     }
 
     private final MarketWorker worker;
@@ -79,23 +103,23 @@ public final class ExchangeRuntime implements AutoCloseable {
 
         private OrderBook.Result order;
         private OptionMarket.Holding option;
+        private boolean closeRequested;
     }
 
     private final RequestJournal<Reply> requests = new RequestJournal<>(256);
     private final Map<String, SimulatedInstrument> instruments = new LinkedHashMap<>();
+    private final Map<String, Map<UUID, Integer>> closing = new LinkedHashMap<>();
     private MarginLedger ledger;
     private OptionMarket options;
     private final CompletableFuture<Void> ready;
     private long restoredTick;
     private boolean botsStarted;
     private int expiryDays = 14;
-    private int seriesDays = 2;
     private double iv = 0.8;
     private double markup = 0.04;
     private double minimumMarkup = 0.01;
     private int priceCents = 1;
     private double maintenanceRatio = 0.5;
-    private final Map<String, Long> nextSeries = new LinkedHashMap<>();
 
     public ExchangeRuntime(Map<String, InstrumentSpec> specs, Map<UUID, Long> initialEquity, String checkpoint,
         long seed) {
@@ -145,10 +169,23 @@ public final class ExchangeRuntime implements AutoCloseable {
                 }
                 ledger = MarginLedger.restore(saved.ledger);
                 for (Map.Entry<String, String> entry : saved.instruments.entrySet()) {
-                    instruments.put(entry.getKey(), SimulatedInstrument.restore(entry.getValue(), ledger, seed));
+                    SimulatedInstrument restored = SimulatedInstrument.restore(entry.getValue(), ledger, seed);
+                    restored.configureBehavior(definitions.get(entry.getKey()).simulation);
+                    instruments.put(entry.getKey(), restored);
                 }
                 requests.restore(saved.requests);
                 options = OptionMarket.restore(saved.options, ledger);
+                if (saved.closing != null)
+                    for (Map.Entry<String, Map<UUID, Integer>> entry : saved.closing.entrySet()) {
+                        if (!instruments.containsKey(entry.getKey()) || entry.getValue() == null)
+                            throw new IllegalArgumentException("Invalid pending close");
+                        for (Map.Entry<UUID, Integer> intent : entry.getValue()
+                            .entrySet())
+                            if (!ledger.hasAccount(intent.getKey()) || intent.getValue() == null
+                                || Math.abs(intent.getValue()) != 1)
+                                throw new IllegalArgumentException("Invalid pending close owner");
+                        closing.put(entry.getKey(), new LinkedHashMap<>(entry.getValue()));
+                    }
                 restoredTick = saved.gameTick;
             }
             worker.clock(false, restoredTick);
@@ -214,8 +251,7 @@ public final class ExchangeRuntime implements AutoCloseable {
             if (expiry < 1 || series < 1 || cents < 1 || !Double.isFinite(volatility) || volatility <= 0) {
                 throw new IllegalArgumentException("Invalid option configuration");
             }
-            expiryDays = expiry;
-            seriesDays = series;
+            expiryDays = Math.min(14, expiry);
             iv = volatility;
             markup = premiumMarkup;
             minimumMarkup = minMarkup;
@@ -241,6 +277,46 @@ public final class ExchangeRuntime implements AutoCloseable {
         });
     }
 
+    public CompletableFuture<OptionMarket.Holding> exitOption(UUID epoch, UUID owner, long request, long holdingId,
+        long quantity, boolean exercise, long quoteId, long minimumPayout) {
+        return worker.submit(() -> {
+            requireReady();
+            if (!generation.equals(epoch)) throw new IllegalArgumentException("Stale market session");
+            Reply reply = requests.execute(owner, request, () -> {
+                Reply result = new Reply();
+                OptionMarket.Holding held = options.holding(owner, holdingId);
+                if (exercise) {
+                    OptionMarket.Contract contract = null;
+                    for (OptionMarket.Contract candidate : options.contracts())
+                        if (candidate.id.equals(held.contract)) {
+                            contract = candidate;
+                            break;
+                        }
+                    if (contract == null) throw new IllegalArgumentException("Unknown contract");
+                    long mark = instrument(contract.underlying).snapshot(worker.gameTick()).lastPrice;
+                    if (mark <= 0) throw new IllegalArgumentException("No executable underlying price");
+                    result.option = options.exercise(
+                        owner,
+                        holdingId,
+                        quantity,
+                        mark * priceCents / 100D,
+                        minimumPayout,
+                        worker.gameTick());
+                } else result.option = options.close(
+                    owner,
+                    holdingId,
+                    quantity,
+                    quoteId,
+                    minimumPayout,
+                    worker.gameTick(),
+                    worker.marketMillis());
+                return result;
+            });
+            if (reply.option == null) throw new IllegalArgumentException("Request ID already used");
+            return reply.option;
+        });
+    }
+
     private void optionCycle() {
         long now = worker.gameTick();
         for (Map.Entry<String, SimulatedInstrument> entry : instruments.entrySet()) {
@@ -248,33 +324,38 @@ public final class ExchangeRuntime implements AutoCloseable {
                 .snapshot(now).lastPrice;
             if (ticks <= 0) continue;
             double spot = ticks * priceCents / 100D;
-            long latestExpiry = 0;
+            java.util.Set<Long> activeExpiries = new java.util.HashSet<>();
             for (OptionMarket.Contract contract : options.contracts()) {
                 if (!contract.underlying.equals(entry.getKey())) continue;
-                latestExpiry = Math.max(latestExpiry, contract.expiryTick);
                 if (now >= contract.expiryTick) {
                     Double frozen = options.settlementPrice(contract.id);
-                    options.settle(
-                        contract.id,
-                        now,
-                        frozen != null ? frozen : settlementReference(entry.getValue(), contract.expiryTick, spot));
-                } else options.quote(contract.id, spot, now, worker.marketMillis(), 1000, iv, markup, minimumMarkup);
-            }
-            long next = nextSeries
-                .getOrDefault(entry.getKey(), Math.max(0, latestExpiry - (expiryDays - seriesDays) * 24000L));
-            if (now < next) continue;
-            long expiry = Math.addExact(now, expiryDays * 24000L);
-            double spacing = Math.max(priceCents / 100D, spot / 4);
-            for (int strike = -3; strike <= 3; strike++) {
-                double exercise = Math.max(priceCents / 100D, spot + strike * spacing);
-                for (com.yuelengm.nhkantan.options.OptionPricing.Kind kind : com.yuelengm.nhkantan.options.OptionPricing.Kind
-                    .values()) {
-                    String id = entry.getKey() + ":" + now + ":" + strike + ":" + kind;
-                    options.add(new OptionMarket.Contract(id, entry.getKey(), kind, exercise, expiry, 1));
-                    options.quote(id, spot, now, worker.marketMillis(), 1000, iv, markup, minimumMarkup);
+                    if (frozen == null) options
+                        .settle(contract.id, now, settlementReference(entry.getValue(), contract.expiryTick, spot));
+                } else {
+                    activeExpiries.add(contract.expiryTick);
+                    options.quote(contract.id, spot, now, worker.marketMillis(), 1000, iv, markup, minimumMarkup);
                 }
             }
-            nextSeries.put(entry.getKey(), now + seriesDays * 24000L);
+            // Calendar-anchored expiries survive restarts and roll one new far series each game day.
+            long today = now / 24000;
+            for (int day = 1; day <= expiryDays; day++) {
+                long expiry = Math.multiplyExact(Math.addExact(today, day), 24000L);
+                if (activeExpiries.contains(expiry)) continue;
+                double spacing = Math.max(priceCents / 100D, spot * 0.05);
+                java.util.Set<Double> strikes = new java.util.HashSet<>();
+                for (int strike = -3; strike <= 3; strike++) {
+                    double exercise = Math.max(
+                        priceCents / 100D,
+                        Math.rint((spot + strike * spacing) * 100 / priceCents) * priceCents / 100D);
+                    if (!strikes.add(exercise)) continue;
+                    for (com.yuelengm.nhkantan.options.OptionPricing.Kind kind : com.yuelengm.nhkantan.options.OptionPricing.Kind
+                        .values()) {
+                        String id = entry.getKey() + ":D" + expiry + ":" + strike + ":" + kind;
+                        options.add(new OptionMarket.Contract(id, entry.getKey(), kind, exercise, expiry, 1));
+                        options.quote(id, spot, now, worker.marketMillis(), 1000, iv, markup, minimumMarkup);
+                    }
+                }
+            }
         }
     }
 
@@ -392,6 +473,9 @@ public final class ExchangeRuntime implements AutoCloseable {
             if (!generation.equals(sessionGeneration)) throw new IllegalArgumentException("Stale market session");
             Reply reply = requests.execute(owner, requestId, () -> {
                 Reply result = new Reply();
+                if (!reduceOnly && closing.getOrDefault(instrument, Collections.emptyMap())
+                    .containsKey(owner))
+                    throw new IllegalArgumentException("Position is closing; wait for remaining liquidity");
                 result.order = instrument(instrument)
                     .submit(owner, side, price, quantity, market, reduceOnly, worker.gameTick());
                 return result;
@@ -399,6 +483,59 @@ public final class ExchangeRuntime implements AutoCloseable {
             if (reply.order == null) throw new IllegalArgumentException("Request ID was used by a different command");
             return reply.order;
         });
+    }
+
+    public CompletableFuture<Boolean> closePosition(UUID epoch, UUID owner, long request, String id) {
+        return worker.submit(() -> {
+            requireReady();
+            if (!generation.equals(epoch)) throw new IllegalArgumentException("Stale market session");
+            Reply reply = requests.execute(owner, request, () -> {
+                SimulatedInstrument market = instrument(id);
+                long held = ledger.position(owner, id).quantity;
+                if (held == 0) throw new IllegalArgumentException("No position to close");
+                for (OrderBook.Order order : market.orders(owner)) market.cancel(owner, order.id);
+                market.clearProtection(owner);
+                closing.computeIfAbsent(id, key -> new LinkedHashMap<>())
+                    .put(owner, Long.signum(held));
+                retryCloses();
+                Reply result = new Reply();
+                result.closeRequested = true;
+                return result;
+            });
+            if (!reply.closeRequested) throw new IllegalArgumentException("Request ID already used");
+            return true;
+        });
+    }
+
+    private void retryCloses() {
+        for (Map.Entry<String, Map<UUID, Integer>> entry : closing.entrySet()) {
+            SimulatedInstrument market = instrument(entry.getKey());
+            java.util.Iterator<Map.Entry<UUID, Integer>> iterator = entry.getValue()
+                .entrySet()
+                .iterator();
+            while (iterator.hasNext()) {
+                Map.Entry<UUID, Integer> intent = iterator.next();
+                long held = ledger.position(intent.getKey(), entry.getKey()).quantity;
+                if (Long.signum(held) != intent.getValue()) {
+                    iterator.remove();
+                    continue;
+                }
+                SimulatedInstrument.Snapshot snapshot = market.snapshot(worker.gameTick());
+                if (snapshot.lastPrice <= 0) continue;
+                long slip = Math.max(1, snapshot.lastPrice / 20);
+                long price = held > 0 ? Math.max(snapshot.lowerPrice, snapshot.lastPrice - slip)
+                    : Math.min(snapshot.upperPrice, snapshot.lastPrice + slip);
+                market.submit(
+                    intent.getKey(),
+                    held > 0 ? OrderBook.Side.SELL : OrderBook.Side.BUY,
+                    price,
+                    Math.abs(held),
+                    true,
+                    true,
+                    worker.gameTick());
+                if (ledger.position(intent.getKey(), entry.getKey()).quantity == 0) iterator.remove();
+            }
+        }
     }
 
     public CompletableFuture<Boolean> cancel(UUID sessionGeneration, UUID owner, String instrument, long orderId) {
@@ -461,6 +598,7 @@ public final class ExchangeRuntime implements AutoCloseable {
             requireReady();
             optionCycle();
             marginCycle();
+            retryCloses();
             Map<String, SimulatedInstrument.Snapshot> result = new LinkedHashMap<>();
             for (Map.Entry<String, SimulatedInstrument> entry : instruments.entrySet()) {
                 result.put(
@@ -482,6 +620,7 @@ public final class ExchangeRuntime implements AutoCloseable {
             saved.ledger = ledger.checkpoint();
             saved.requests = requests.checkpoint();
             saved.options = options.checkpoint();
+            saved.closing = closing;
             saved.instruments = new LinkedHashMap<>();
             for (Map.Entry<String, SimulatedInstrument> entry : instruments.entrySet()) {
                 saved.instruments.put(

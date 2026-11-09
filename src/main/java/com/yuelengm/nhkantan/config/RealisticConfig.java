@@ -71,6 +71,11 @@ public class RealisticConfig {
     @Config.RangeDouble(min = 0, max = 10000)
     public static double fairVolatilityTicks;
 
+    @Config.Comment("Fair-price volatility multiplier; new default also applies to existing configuration files.")
+    @Config.DefaultDouble(12)
+    @Config.RangeDouble(min = 0, max = 100)
+    public static double volatilityMultiplier;
+
     @Config.DefaultDouble(0.02)
     @Config.RangeDouble(min = 0, max = 1)
     public static double flowImpact;
@@ -78,10 +83,12 @@ public class RealisticConfig {
     @Config.DefaultInt(42)
     public static int seed;
 
+    @Config.Comment("Daily expiry ladder, from 1 to this many game days (maximum 14).")
     @Config.DefaultInt(14)
-    @Config.RangeInt(min = 1, max = 365)
+    @Config.RangeInt(min = 1, max = 14)
     public static int expiryGameDays;
 
+    @Config.Comment("Legacy setting retained for configuration compatibility; expiry series now roll daily.")
     @Config.DefaultInt(2)
     @Config.RangeInt(min = 1, max = 365)
     public static int seriesEveryGameDays;

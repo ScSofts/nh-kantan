@@ -30,7 +30,7 @@ public final class SimulatedInstrument {
         public long botCashCents = 100000000;
         public int depth = 8;
         public long baseOrderSize = 3;
-        public double volatility = 0.5;
+        public double volatility = 6;
         public double impact = 0.02;
         public double jitter = 0.4;
         public int historyCapacity = 100;
@@ -157,6 +157,28 @@ public final class SimulatedInstrument {
             this.direction = Long.signum(held);
             initialPosition = Math.abs(held);
         }
+    }
+
+    /** Detached public fields only: the actor keeps ownership of mutable OCO state. */
+    public Protection protection(UUID owner) {
+        Protection value = protections.get(owner);
+        return value == null ? null
+            : new Protection(value.stopPrice, value.takePrice, value.quantity, value.direction * value.initialPosition);
+    }
+
+    /** Reapply restart-bound behavior without altering saved contracts, balances or price bounds. */
+    public void configureBehavior(Settings configured) {
+        Settings checked = configured.copy();
+        settings.volatility = checked.volatility;
+        settings.impact = checked.impact;
+        settings.jitter = checked.jitter;
+        settings.depth = checked.depth;
+        settings.baseOrderSize = checked.baseOrderSize;
+    }
+
+    public void clearProtection(UUID owner) {
+        Protection previous = protections.remove(owner);
+        if (previous != null && previous.takeOrder > 0) book.cancel(owner, previous.takeOrder);
     }
 
     public void protect(UUID owner, long quantity, long stopPrice, long takePrice, long gameTick) {

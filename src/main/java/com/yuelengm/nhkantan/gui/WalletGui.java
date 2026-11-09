@@ -9,7 +9,9 @@ import javax.annotation.Nullable;
 
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
+import net.minecraft.entity.player.InventoryPlayer;
 import net.minecraft.item.ItemStack;
+import net.minecraft.nbt.NBTTagList;
 import net.minecraft.util.EnumChatFormatting;
 import net.minecraft.util.StatCollector;
 
@@ -41,6 +43,8 @@ import com.yuelengm.nhkantan.gui.util.GuiActions;
 import com.yuelengm.nhkantan.gui.util.ItemDisplayWidgetEx;
 import com.yuelengm.nhkantan.gui.util.Widgets;
 import com.yuelengm.nhkantan.item.ItemMarketTerminal;
+import com.yuelengm.nhkantan.market.server.RealisticService;
+import com.yuelengm.nhkantan.util.ItemSpec;
 import com.yuelengm.nhkantan.util.MathUtils;
 import com.yuelengm.nhkantan.util.PlayerInventories;
 import com.yuelengm.nhkantan.wallet.CurrencyFormat;
@@ -103,7 +107,10 @@ public class WalletGui implements IGuiHolder<GuiData> {
 
     /** The wallet balance, read on the server and synced to the client; register under {@link #BALANCE_SYNC_KEY}. */
     public static LongSyncValue balanceValue(EntityPlayer player) {
-        return new LongSyncValue(() -> 0L, () -> WalletService.balanceOf(player));
+        return new LongSyncValue(
+            () -> 0L,
+            () -> RealisticService.get() != null && player instanceof EntityPlayerMP ? RealisticService.get()
+                .balance((EntityPlayerMP) player) : WalletService.balanceOf(player));
     }
 
     @Override
@@ -408,6 +415,16 @@ public class WalletGui implements IGuiHolder<GuiData> {
 
         /** Server: validates and performs a withdrawal request; the client keeps its selection. */
         private void withdraw(int index, int count) {
+            RealisticService market = RealisticService.get();
+            if (market != null && player instanceof EntityPlayerMP) {
+                if (ExchangeItems.withdrawable(index) == null || count < 1 || count > MAX_QUANTITY) return;
+                try {
+                    if (restoreStagedInventory()) market.exchange((EntityPlayerMP) player, index, count, true);
+                } catch (Exception e) {
+                    NHKantan.LOG.warn("Wallet withdrawal rejected or pending", e);
+                }
+                return;
+            }
             WalletService service = WalletService.get();
             CurrencyItem item = ExchangeItems.withdrawable(index);
             if (service == null || item == null || count < 1 || count > MAX_QUANTITY) return;
@@ -416,6 +433,38 @@ public class WalletGui implements IGuiHolder<GuiData> {
 
         /** Server: hands in the slot contents; whatever is not accepted stays in the slots. */
         private void settleDeposit() {
+            RealisticService market = RealisticService.get();
+            if (market != null && player instanceof EntityPlayerMP) {
+                boolean debt = market.balance((EntityPlayerMP) player) < 0;
+                List<CurrencyItem> items = debt ? ExchangeItems.debtItems() : ExchangeItems.currencyItems();
+                long[] counts = new long[items.size()];
+                for (int slot = 0; slot < DEPOSIT_SLOTS; slot++) {
+                    ItemStack stack = depositSlots.getStackInSlot(slot);
+                    if (stack == null) continue;
+                    for (int i = 0; i < items.size(); i++) {
+                        long units = items.get(i)
+                            .items()
+                            .unitsOf(stack);
+                        if (units > 0) {
+                            counts[i] = Math.addExact(counts[i], units);
+                            break;
+                        }
+                    }
+                }
+                // The durable exchange sees every staged item in the real, saved inventory first.
+                if (!restoreStagedInventory()) return;
+                try {
+                    for (int i = 0; i < counts.length; i++) while (counts[i] > 0) {
+                        if (debt && market.balance((EntityPlayerMP) player) >= 0) return;
+                        int count = (int) Math.min(1000000, counts[i]);
+                        if (!market.exchange((EntityPlayerMP) player, i, count, false)) return;
+                        counts[i] -= count;
+                    }
+                } catch (Exception e) {
+                    NHKantan.LOG.warn("Wallet deposit rejected or pending", e);
+                }
+                return;
+            }
             WalletService service = WalletService.get();
             if (service == null) return;
             for (int i = 0; i < DEPOSIT_SLOTS; i++) {
@@ -423,6 +472,28 @@ public class WalletGui implements IGuiHolder<GuiData> {
                 if (stack == null || service.settleStack(player, stack) == 0) continue;
                 depositSlots.setStackInSlot(i, stack.stackSize > 0 ? stack : null);
             }
+        }
+
+        /** Validate all staged items fit before moving any; never drop an item to perform a deposit. */
+        private boolean restoreStagedInventory() {
+            InventoryPlayer copy = new InventoryPlayer(player);
+            copy.readFromNBT(player.inventory.writeToNBT(new NBTTagList()));
+            for (int slot = 0; slot < DEPOSIT_SLOTS; slot++) {
+                ItemStack stack = depositSlots.getStackInSlot(slot);
+                if (stack == null) continue;
+                if (stack.hasTagCompound() || !PlayerInventories.canFit(
+                    copy,
+                    java.util.Collections
+                        .singletonMap(new ItemSpec(stack.getItem(), stack.getItemDamage()), stack.stackSize)))
+                    return false;
+                ItemStack inserted = stack.copy();
+                if (!copy.addItemStackToInventory(inserted) || inserted.stackSize != 0) return false;
+            }
+            player.inventory.readFromNBT(copy.writeToNBT(new NBTTagList()));
+            for (int slot = 0; slot < DEPOSIT_SLOTS; slot++) depositSlots.setStackInSlot(slot, null);
+            player.inventory.markDirty();
+            PlayerInventories.resync(player);
+            return true;
         }
 
         private void returnDepositSlots() {

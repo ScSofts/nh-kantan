@@ -25,6 +25,12 @@ public class ClientProxy extends CommonProxy {
     }
 
     @Override
+    public Widget<?> createStockChart(Supplier<StockView> stock,
+        Supplier<java.util.List<com.yuelengm.nhkantan.market.view.ChartLine>> lines) {
+        return new StockChartWidget(stock, lines);
+    }
+
+    @Override
     public Widget<?> createStockChart(Supplier<StockView> stock) {
         return new StockChartWidget(stock);
     }
