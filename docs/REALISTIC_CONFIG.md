@@ -87,3 +87,11 @@ python3 tools/simulate_market.py --config /path/to/nhkantan.cfg
 图表固定 15 活动游戏秒（300 tick）一根，由独立 chartHistory 逐笔累计真实 OHLCV；终端与世界显示屏一致。内部策略桶仍由原 `MarketConfig.updateIntervalTicks` 决定，机器人、公允价 VWAP 和期权到期参考价不因显示周期改变。旧存档内部历史保留，新图表从升级后的成交开始累积，并随检查点保存。
 
 正常影线保留，异常长影线的远端逐段降低对比度；数据与坐标轴仍采用真实 high/low，不裁剪价格。仅编译打包，未模拟或启动 MC。最终产物 `build/libs/nhkantan-final.jar`。
+
+## 余额与保证金率
+
+旧钱包迁移优先直接读取 data/nhkantan_wallets.dat 的 NBT data 包装（也兼容直接根标签），BalancesCents 按分、旧 Balances 按整币换算，未知结构/非法UUID或非数值拒绝迁移，防止静默清零。清理前保留 legacy-backup 钱包/持仓文件及首次历史目录。已迁移世界继续读取 realistic.dat，不用旧钱包覆盖当前账户，玩家UUID必须保持一致。
+
+服务端 `realistic.initialMarginBps` 范围 10–10000，以基点计：10 为 0.1%（理论1000倍），100 为1%，1000为10%（默认）。修改后重启服务器；已有世界也应用新值并重新计算挂单冻结资金。`maintenanceMarginBps` 不应超过该值，超过则自动归一为一半。等效杠杆展示实际合约总名义价值/账户权益，区别于保证金率决定的理论杠杆，不计期权。
+
+用户不要求代为恢复旧资金；已迁移账户不会自动重复补款。未拿到受影响存档，实际迁移仍待用户确认。

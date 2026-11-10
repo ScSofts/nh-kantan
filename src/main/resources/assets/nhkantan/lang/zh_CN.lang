@@ -171,3 +171,5 @@ notification.nhkantan.take_filled.detail=成交价 %s NHC
 notification.nhkantan.option_expired.title=期权已到期结算
 notification.nhkantan.option_expired.body=%s · 到期 %s 份
 notification.nhkantan.option_expired.detail=结算到账 %s
+
+gui.nhkantan.exchange.effective_leverage=等效杠杆 %s× · 合约持仓总名义价值 / 账户权益

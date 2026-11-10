@@ -145,3 +145,5 @@ Python 先行对照采用简化价格/时间订单簿和机构模型：4 个种�
 行情过程 `MarketDynamics` 与 `62d6d3c` 一致。新增 chartCandles/chartBucketTicks 公共字段及可选检查点历史，不改变账户和算法状态。终端提示标注 15 秒；显示屏复用相同数据。长影线阈值为 max(实体2倍,4像素)，远端分段降低对比度，不缩短真实端点。
 
 仅 `bash gradlew --console=plain spotlessApply assemble`，最终下载产物 `build/libs/nhkantan-final.jar`；未模拟、未运行 Java 测试或 MC，等待人工反馈。
+
+余额/杠杆追加：旧钱包迁移优先直接读取 data/nhkantan_wallets.dat 的 NBT data 包装（也兼容直接根标签），BalancesCents 按分、旧 Balances 按整币换算，未知结构/非法UUID或非数值拒绝迁移，防止静默清零。清理前保留 legacy-backup 钱包/持仓文件及首次历史目录。已迁移世界继续读取 realistic.dat，不用旧钱包覆盖当前账户，玩家UUID必须保持一致。 UI展示实际合约等效杠杆；保证金率可配置，最低10bps=0.1%（理论1000倍），默认10%不变，重启时对旧世界重新应用。用户不要求代为恢复资金；仅编译打包，未运行Java/MC测试，未复现玩家具体问题。

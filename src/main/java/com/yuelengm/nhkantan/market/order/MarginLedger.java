@@ -318,11 +318,19 @@ public final class MarginLedger {
         return result;
     }
 
+    /** Apply server margin settings before restoring any order reservations. */
+    public void configureMargin(String id, int marginBps) {
+        Instrument instrument = instruments.get(id);
+        if (instrument == null || marginBps < 10 || marginBps > 10000 || !instrument.reservations.isEmpty())
+            throw new IllegalArgumentException("Cannot reconfigure margin with active reservations");
+        instrument.marginBps = marginBps;
+    }
+
     public final class Instrument implements OrderBook.Settlement {
 
         private final String id;
         private final long tickValue;
-        private final int marginBps;
+        private int marginBps;
         private final int feePpm;
         private final long maxPosition;
         private final long maximumPrice;

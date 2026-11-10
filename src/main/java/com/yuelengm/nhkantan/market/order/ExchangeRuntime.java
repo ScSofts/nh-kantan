@@ -173,6 +173,8 @@ public final class ExchangeRuntime implements AutoCloseable {
                 }
                 notices = MarketNotices.restore(saved.notifications);
                 ledger = MarginLedger.restore(saved.ledger);
+                for (Map.Entry<String, InstrumentSpec> definition : definitions.entrySet())
+                    ledger.configureMargin(definition.getKey(), definition.getValue().marginBps);
                 for (Map.Entry<String, String> entry : saved.instruments.entrySet()) {
                     SimulatedInstrument restored = SimulatedInstrument.restore(entry.getValue(), ledger, seed);
                     restored.configureBehavior(definitions.get(entry.getKey()).simulation);

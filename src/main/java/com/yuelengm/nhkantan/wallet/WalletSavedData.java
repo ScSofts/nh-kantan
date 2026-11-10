@@ -49,14 +49,17 @@ public class WalletSavedData extends WorldSavedData {
     @Override
     public void readFromNBT(NBTTagCompound tag) {
         balances.clear();
+        if (tag.hasKey(NBT_BALANCES) && !tag.hasKey(NBT_BALANCES, 10))
+            throw new IllegalArgumentException("Invalid cents balance container");
         boolean legacy = !tag.hasKey(NBT_BALANCES);
         NBTTagCompound stored = tag.getCompoundTag(legacy ? NBT_LEGACY_BALANCES : NBT_BALANCES);
         for (String key : stored.func_150296_c()) {
             try {
+                if (!stored.hasKey(key, 99)) throw new IllegalArgumentException("Balance is not numeric");
                 long value = stored.getLong(key);
                 balances.put(UUID.fromString(key), legacy ? Money.cents(value) : value);
-            } catch (IllegalArgumentException ignored) {
-                // Not a UUID; skip the corrupt entry
+            } catch (IllegalArgumentException error) {
+                throw new IllegalArgumentException("Invalid legacy wallet entry: " + key, error);
             }
         }
     }

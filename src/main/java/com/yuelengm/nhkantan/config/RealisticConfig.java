@@ -22,9 +22,9 @@ public class RealisticConfig {
     @Config.RangeInt(min = 1, max = 1000000)
     public static int tickValueCents;
 
-    @Config.Comment("Initial margin in basis points: 1000 = 10%, fixed for this instrument.")
+    @Config.Comment("Initial margin in basis points: 10 = 0.1% (1000x), 1000 = 10%. Configurable on server restart.")
     @Config.DefaultInt(1000)
-    @Config.RangeInt(min = 1, max = 10000)
+    @Config.RangeInt(min = 10, max = 10000)
     public static int initialMarginBps;
 
     @Config.Comment("Maintenance margin in basis points; must not exceed initial margin.")

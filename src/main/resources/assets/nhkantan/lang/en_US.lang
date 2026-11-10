@@ -171,3 +171,5 @@ notification.nhkantan.take_filled.detail=Fill price %s NHC
 notification.nhkantan.option_expired.title=Options expired and settled
 notification.nhkantan.option_expired.body=%s / %s contracts expired
 notification.nhkantan.option_expired.detail=Settlement credit %s
+
+gui.nhkantan.exchange.effective_leverage=Effective leverage %sx / Gross contract exposure divided by account equity

@@ -236,3 +236,11 @@ python3 /workspace/.cloud-setup/server-status.py
 - `Snapshot.chartCandles/chartBucketTicks` 与原内部 candles/bucketTicks 并存，StockView 只把 chartCandles 用于终端和世界显示屏。旧公共快照无该字段时回退旧 candles。检查点新增可选 chartCandles；旧存档保留内部历史，15 秒图表从升级后的新成交累积，随后跨重启恢复。
 - 长影线只降低远端对比度：实体外超过 max(实体高度2倍,4像素) 的部分逐段淡化，正常影线保留。真实 high/low、图表坐标轴、成交记录和触发/结算价格不裁剪。
 - 仅 `spotlessApply assemble` 编译打包，未运行模拟、Java 测试或 MC，实际显示待人工确认。最终产物 `build/libs/nhkantan-final.jar`。
+
+### 余额迁移与等效杠杆（2026-11-10）
+
+- 旧钱包迁移优先直接读取 data/nhkantan_wallets.dat 的 NBT data 包装（也兼容直接根标签），BalancesCents 按分、旧 Balances 按整币换算，未知结构/非法UUID或非数值拒绝迁移，防止静默清零。清理前保留 legacy-backup 钱包/持仓文件及首次历史目录。已迁移世界继续读取 realistic.dat，不用旧钱包覆盖当前账户，玩家UUID必须保持一致。
+- 用户明确不要求代为恢复资金；未取得玩家存档或复现其余额清零，不能宣称已证实具体根因。没有修改用户账户。
+- 交易页余额下新增等效杠杆：所有合约绝对持仓量×当前成交价×tickValueCents之和/账户权益；不包含期权，空仓0，持仓且非正权益显示∞。
+- realistic.initialMarginBps 为服务端可配置项，范围10–10000，10=0.1%=理论1000倍；默认1000=10%保持。已有世界恢复账本后、恢复订单前应用配置并重建冻结额，实际占用保证金与UI一致。调低配置可能影响强平判断；维持保证金超出初始保证金时仍按一半归一化。
+- 本次仅 spotlessApply assemble，不执行Java测试/MC，无行情算法变更，15秒K线与通知沿用；产物 build/libs/nhkantan-balance-leverage.jar。

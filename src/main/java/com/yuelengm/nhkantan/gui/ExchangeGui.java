@@ -99,6 +99,10 @@ public final class ExchangeGui implements IGuiHolder<GuiData> {
                 Widgets.text(IKey.dynamic(state::summary))
                     .color(0xFFCEE3FA)
                     .fullWidth())
+            .child(
+                Widgets.text(IKey.dynamic(state::effectiveLeverage))
+                    .color(0xFF7DDAC8)
+                    .fullWidth())
             .child(content)
             .child(
                 Widgets.text(IKey.dynamic(() -> state.feedbackText()))
@@ -326,6 +330,22 @@ public final class ExchangeGui implements IGuiHolder<GuiData> {
             String code = feedback.getStringValue();
             return ("REJECTED".equals(code) ? "§c" : "PENDING".equals(code) ? "§e" : "§b") + IKey.lang(
                 "gui.nhkantan.exchange.status." + (code.isEmpty() ? "ready" : code.toLowerCase(java.util.Locale.ROOT)))
+                .get();
+        }
+
+        private String effectiveLeverage() {
+            ClientExchangeData.Frame frame = ClientExchangeData.get();
+            if (account == null || account.account == null || frame == null) return "";
+            double gross = 0;
+            for (Map.Entry<String, MarginLedger.Position> entry : account.positions.entrySet()) {
+                SimulatedInstrument.Snapshot market = frame.instruments.get(entry.getKey());
+                if (market != null)
+                    gross += Math.abs((double) entry.getValue().quantity) * market.lastPrice * frame.tickValueCents;
+            }
+            String value = gross == 0 ? "0.00"
+                : account.account.equity <= 0 ? "∞"
+                    : String.format(java.util.Locale.ROOT, "%.2f", gross / account.account.equity);
+            return IKey.lang("gui.nhkantan.exchange.effective_leverage", value)
                 .get();
         }
 
