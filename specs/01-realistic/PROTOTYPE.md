@@ -137,3 +137,11 @@ Python 先行对照采用简化价格/时间订单簿和机构模型：4 个种�
 做市挂单倍率由 10 改为 3，默认目标约 720–3240 张/档；旧 cfg 中的 10 在内存迁移为 3。补单频率、双实例、巨鲸上限、真实成交 OHLC 沿用。新增动态状态随检查点保存，旧存档缺失字段为零，不清空账户或历史。
 
 仅执行 `bash gradlew --console=plain spotlessApply assemble`，不运行 Python 模拟、Java 测试或 MC；此前模拟统计不适用于本版，走势由用户人工体验。产物 `build/libs/nhkantan-market-tuning.jar`。
+
+## 当前交付：恢复 9f8f1e5 行情基线（2026-11-10）
+
+最新决定覆盖此前行情微调：恢复 `9f8f1e5` 行情/报价/执行，只保留做市挂单默认3倍、巨鲸最大持仓为原机构上限1/3（默认33333张）、五类各两个不同参数实例。撤回后来新增的报价平滑、限价保护及趋势扰动，做市频率回到基线再叠加实例节奏。旧巨鲸超额仓位只减不加；AE无条件通知和UI保留。本次只编译打包，不运行模拟或Java/MC测试。
+
+`MarketDynamics`、`OrderBook` 和 `ExchangeRuntime` 源码恢复为指定提交；机器人仅在规模、仓位与双实例参数上叠加变更。停用实例的旧挂单退出，账户、玩家挂单和已成交历史保留。旧存档中后来新增的动态字段由 Gson 忽略，不清空净值或重置阶段。
+
+产物：`build/libs/nhkantan-market-9f8f1e5.jar`。验证仅 `bash gradlew --console=plain spotlessApply assemble`，实际市场体验待人工确认；此前所有微调版模拟统计不适用于当前组合。
