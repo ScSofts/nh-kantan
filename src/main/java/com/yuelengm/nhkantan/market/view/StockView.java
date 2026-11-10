@@ -72,7 +72,10 @@ public class StockView {
         view.exchange = true;
         view.exchangePrice = snapshot.lastPrice * scale;
         List<Candle> candles = new ArrayList<>();
-        for (com.yuelengm.nhkantan.market.order.TradeHistory.Bar bar : snapshot.candles) {
+        List<com.yuelengm.nhkantan.market.order.TradeHistory.Bar> displayed = snapshot.chartCandles == null
+            ? snapshot.candles
+            : snapshot.chartCandles;
+        for (com.yuelengm.nhkantan.market.order.TradeHistory.Bar bar : displayed) {
             candles.add(
                 new Candle(
                     bar.open * scale,

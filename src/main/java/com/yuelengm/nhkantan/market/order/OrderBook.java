@@ -292,6 +292,23 @@ public final class OrderBook {
         return side == Side.BUY ? bids : asks;
     }
 
+    /** Read-only helpers for the instrument's automated-quote lifecycle and IOC sizing. */
+    public boolean isActive(long orderId) {
+        return active.containsKey(orderId);
+    }
+
+    public long executableDepth(Side aggressor, long limit) {
+        long total = 0;
+        for (Map.Entry<Long, Deque<Entry>> level : levels(aggressor.opposite()).entrySet()) {
+            if (aggressor == Side.BUY ? level.getKey() > limit : level.getKey() < limit) break;
+            for (Entry entry : level.getValue()) {
+                if (entry.remaining > Long.MAX_VALUE - total) return Long.MAX_VALUE;
+                total += entry.remaining;
+            }
+        }
+        return total;
+    }
+
     /** Defensive copies in price/time order, safe to publish as part of a snapshot. */
     public List<Order> orders(Side side) {
         List<Order> result = new ArrayList<>();

@@ -52,7 +52,9 @@ public final class ClientExchangeData {
             if (instrument == null || instrument.capacity < 1
                 || instrument.capacity > 1000
                 || instrument.candles == null
-                || instrument.candles.size() > instrument.capacity) {
+                || instrument.candles.size() > instrument.capacity
+                || (instrument.chartCandles != null && (instrument.chartCandles.size() > instrument.capacity
+                    || instrument.chartBucketTicks != SimulatedInstrument.CHART_BUCKET_TICKS))) {
                 throw new IllegalArgumentException("Invalid exchange candle window");
             }
         }

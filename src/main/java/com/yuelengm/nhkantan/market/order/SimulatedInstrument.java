@@ -14,6 +14,8 @@ import com.google.gson.Gson;
 /** Pure market-thread instrument: bots, players and option hedges all enter the same book. */
 public final class SimulatedInstrument {
 
+    public static final long CHART_BUCKET_TICKS = 15 * 20L;
+
     public enum Strategy {
         MARKET_MAKER,
         TREND,
@@ -33,7 +35,6 @@ public final class SimulatedInstrument {
         public long fairWindowTicks = 1200;
         public int depth = 8;
         public long baseOrderSize = 300;
-        public int makerQuoteSizeMultiplier = 3;
         public double volatility = 6;
         public double impact = 0.02;
         public double anchorFollowRate = 0.001;
@@ -43,6 +44,17 @@ public final class SimulatedInstrument {
         public double vwapDeviationVolMultiplier = 2.0;
         public double fairNoiseMemory = 0.85;
         public double fairNoiseLimitMultiplier = 3.0;
+
+        public int makerQuoteSizeMultiplier = 3;
+        public double makerIntervalScale = 0.4;
+        public int whaleMaxOrderContracts = 5000;
+        public int makerSpreadBps = 10;
+        public int makerInventorySkewBps = 5;
+        public int makerRepriceBpsPerSecond = 120;
+        public int automatedQuoteBandBps = 30;
+        public long automatedQuoteLifetimeTicks = 40;
+        public int botMaxSlippageBps = 20;
+        public double botMaxLiquidityFraction = 0.25;
 
         public double jitter = 0.4;
         public int regimeMinSteps = 300;
@@ -66,8 +78,6 @@ public final class SimulatedInstrument {
                 || depth > 100
                 || baseOrderSize < 1
                 || baseOrderSize > 1000000
-                || makerQuoteSizeMultiplier < 1
-                || makerQuoteSizeMultiplier > 100
                 || !Double.isFinite(volatility)
                 || volatility < 0
                 || !Double.isFinite(impact)
@@ -75,6 +85,26 @@ public final class SimulatedInstrument {
                 || !Double.isFinite(jitter)
                 || jitter < 0
                 || jitter > 1
+                || makerQuoteSizeMultiplier < 1
+                || makerQuoteSizeMultiplier > 100
+                || !finiteRange(makerIntervalScale, 2)
+                || makerIntervalScale < 0.05
+                || whaleMaxOrderContracts < 1
+                || whaleMaxOrderContracts > 100000
+                || makerSpreadBps < 1
+                || makerSpreadBps > 200
+                || makerInventorySkewBps < 0
+                || makerInventorySkewBps > 100
+                || makerRepriceBpsPerSecond < 1
+                || makerRepriceBpsPerSecond > 1000
+                || automatedQuoteBandBps < 1
+                || automatedQuoteBandBps > 1000
+                || automatedQuoteLifetimeTicks < 1
+                || automatedQuoteLifetimeTicks > 1200
+                || botMaxSlippageBps < 1
+                || botMaxSlippageBps > 500
+                || !unit(botMaxLiquidityFraction)
+                || botMaxLiquidityFraction < 0.01
                 || !unit(anchorFollowRate)
                 || !unit(flowFollowRate)
                 || !unit(fairVwapWeight)
@@ -102,7 +132,6 @@ public final class SimulatedInstrument {
             copy.fairWindowTicks = fairWindowTicks;
             copy.depth = depth;
             copy.baseOrderSize = baseOrderSize;
-            copy.makerQuoteSizeMultiplier = makerQuoteSizeMultiplier;
             copy.volatility = volatility;
             copy.impact = impact;
             copy.anchorFollowRate = anchorFollowRate;
@@ -114,6 +143,17 @@ public final class SimulatedInstrument {
             copy.fairNoiseLimitMultiplier = fairNoiseLimitMultiplier;
 
             copy.jitter = jitter;
+            copy.makerQuoteSizeMultiplier = makerQuoteSizeMultiplier;
+            copy.makerIntervalScale = makerIntervalScale;
+            copy.whaleMaxOrderContracts = whaleMaxOrderContracts;
+            copy.makerSpreadBps = makerSpreadBps;
+            copy.makerInventorySkewBps = makerInventorySkewBps;
+            copy.makerRepriceBpsPerSecond = makerRepriceBpsPerSecond;
+            copy.automatedQuoteBandBps = automatedQuoteBandBps;
+            copy.automatedQuoteLifetimeTicks = automatedQuoteLifetimeTicks;
+            copy.botMaxSlippageBps = botMaxSlippageBps;
+            copy.botMaxLiquidityFraction = botMaxLiquidityFraction;
+
             copy.regimeMinSteps = regimeMinSteps;
             copy.regimeMaxSteps = regimeMaxSteps;
             copy.trendMoveBps = trendMoveBps;
@@ -137,6 +177,8 @@ public final class SimulatedInstrument {
         public final List<Level> bids;
         public final List<Level> asks;
         public final List<TradeHistory.Bar> candles;
+        public final List<TradeHistory.Bar> chartCandles;
+        public final long chartBucketTicks;
         public final long lastPrice;
         public final long volume;
         public final int capacity;
@@ -148,6 +190,8 @@ public final class SimulatedInstrument {
             bids = instrument.depth(OrderBook.Side.BUY);
             asks = instrument.depth(OrderBook.Side.SELL);
             candles = instrument.history.snapshot();
+            chartCandles = instrument.chartHistory.snapshot();
+            chartBucketTicks = CHART_BUCKET_TICKS;
             lastPrice = instrument.lastPrice;
             volume = instrument.volume;
             capacity = instrument.settings.historyCapacity;
@@ -193,12 +237,31 @@ public final class SimulatedInstrument {
     private final MarginLedger ledger;
     private final OrderBook book;
     private final TradeHistory history;
+    // Display aggregation is independent of strategy/VWAP/option-settlement buckets.
+    private final TradeHistory chartHistory;
     private MarketDynamics dynamics;
     private double fairPrice;
     private double flow;
     private long lastPrice;
     private long volume;
     private long marketTick;
+    private double quoteCenter;
+    private final java.util.Set<UUID> automatedOwners = new java.util.HashSet<>();
+    private final Map<Long, AutomatedQuote> automatedQuotes = new LinkedHashMap<>();
+
+    private static final class AutomatedQuote {
+
+        private final UUID owner;
+        private final long price;
+        private final long tick;
+
+        private AutomatedQuote(UUID owner, long price, long tick) {
+            this.owner = owner;
+            this.price = price;
+            this.tick = tick;
+        }
+    }
+
     private final Map<UUID, Protection> protections = new LinkedHashMap<>();
     private boolean checkingProtections;
     private MarketNotices notices;
@@ -251,9 +314,19 @@ public final class SimulatedInstrument {
         settings.fairNoiseLimitMultiplier = checked.fairNoiseLimitMultiplier;
 
         settings.jitter = checked.jitter;
+        settings.makerQuoteSizeMultiplier = checked.makerQuoteSizeMultiplier;
+        settings.makerIntervalScale = checked.makerIntervalScale;
+        settings.whaleMaxOrderContracts = checked.whaleMaxOrderContracts;
+        settings.makerSpreadBps = checked.makerSpreadBps;
+        settings.makerInventorySkewBps = checked.makerInventorySkewBps;
+        settings.makerRepriceBpsPerSecond = checked.makerRepriceBpsPerSecond;
+        settings.automatedQuoteBandBps = checked.automatedQuoteBandBps;
+        settings.automatedQuoteLifetimeTicks = checked.automatedQuoteLifetimeTicks;
+        settings.botMaxSlippageBps = checked.botMaxSlippageBps;
+        settings.botMaxLiquidityFraction = checked.botMaxLiquidityFraction;
+
         settings.depth = checked.depth;
         settings.baseOrderSize = checked.baseOrderSize;
-        settings.makerQuoteSizeMultiplier = checked.makerQuoteSizeMultiplier;
         settings.regimeMinSteps = checked.regimeMinSteps;
         settings.regimeMaxSteps = checked.regimeMaxSteps;
         settings.trendMoveBps = checked.trendMoveBps;
@@ -350,6 +423,7 @@ public final class SimulatedInstrument {
         private Settings settings;
         private String book;
         private List<TradeHistory.Bar> candles;
+        private List<TradeHistory.Bar> chartCandles;
         private double fair;
         private double drift; // Kept for version-one save validation.
         private MarketDynamics dynamics;
@@ -366,8 +440,10 @@ public final class SimulatedInstrument {
         this.ledger = ledger;
         this.book = new OrderBook(settlement);
         this.history = new TradeHistory(settings.historyCapacity, settings.candleTicks);
+        this.chartHistory = new TradeHistory(settings.historyCapacity, CHART_BUCKET_TICKS);
         fairPrice = settings.initialPrice;
         dynamics = new MarketDynamics(fairPrice, seed ^ id.hashCode());
+        initializeQuoteControls();
     }
 
     private SimulatedInstrument(Checkpoint saved, MarginLedger ledger, long seed) {
@@ -376,6 +452,9 @@ public final class SimulatedInstrument {
         this.ledger = ledger;
         book = OrderBook.restore(saved.book, ledger.instrument(id));
         history = TradeHistory.restore(settings.historyCapacity, settings.candleTicks, saved.candles);
+        // Old checkpoints keep their strategy history; exact 15-second candles begin with new fills.
+        chartHistory = saved.chartCandles == null ? new TradeHistory(settings.historyCapacity, CHART_BUCKET_TICKS)
+            : TradeHistory.restore(settings.historyCapacity, CHART_BUCKET_TICKS, saved.chartCandles);
         fairPrice = saved.fair;
         dynamics = saved.dynamics == null ? new MarketDynamics(fairPrice, seed ^ id.hashCode()) : saved.dynamics;
         dynamics.validate(settings.lowerPrice, settings.upperPrice);
@@ -394,6 +473,61 @@ public final class SimulatedInstrument {
             }
         }
         protections.putAll(saved.protections);
+        initializeQuoteControls();
+    }
+
+    private UUID botOwner(Strategy strategy, int index) {
+        return UUID
+            .nameUUIDFromBytes(("nhkantan:" + id + ":" + strategy + ":" + index).getBytes(StandardCharsets.UTF_8));
+    }
+
+    private void initializeQuoteControls() {
+        quoteCenter = lastPrice > 0 ? lastPrice : fairPrice;
+        // Include inactive old instances too: lowering bot counts must not leave their quotes behind forever.
+        for (Strategy strategy : new Strategy[] { Strategy.MARKET_MAKER, Strategy.NOISE })
+            for (int i = 0; i < 100; i++) automatedOwners.add(botOwner(strategy, i));
+        for (OrderBook.Side side : OrderBook.Side.values()) for (OrderBook.Order order : book.orders(side)) {
+            if (automatedOwners.contains(order.owner))
+                automatedQuotes.put(order.id, new AutomatedQuote(order.owner, order.price, -1));
+        }
+    }
+
+    private double quoteHalfSpread() {
+        return quoteHalfSpread(1);
+    }
+
+    private double quoteHalfSpread(double profileScale) {
+        return Math.max(1, Math.ceil(quoteCenter * settings.makerSpreadBps / 20000D * profileScale));
+    }
+
+    private double minimumQuoteBand() {
+        return Math.ceil(quoteHalfSpread() * 2.1 + settings.depth + 3);
+    }
+
+    private void retireAutomatedQuotes(long gameTick) {
+        double band = Math.max(minimumQuoteBand(), quoteCenter * settings.automatedQuoteBandBps / 10000D);
+        java.util.Iterator<Map.Entry<Long, AutomatedQuote>> iterator = automatedQuotes.entrySet()
+            .iterator();
+        while (iterator.hasNext()) {
+            Map.Entry<Long, AutomatedQuote> entry = iterator.next();
+            AutomatedQuote quote = entry.getValue();
+            if (!book.isActive(entry.getKey())) {
+                iterator.remove();
+                continue;
+            }
+            if (quote.tick < 0 || gameTick - quote.tick >= settings.automatedQuoteLifetimeTicks
+                || Math.abs(quote.price - quoteCenter) > band) {
+                book.cancel(quote.owner, entry.getKey());
+                iterator.remove();
+            }
+        }
+    }
+
+    public long automatedExecutionLimit(OrderBook.Side side) {
+        double distance = Math.max(minimumQuoteBand(), quoteCenter * settings.botMaxSlippageBps / 10000D);
+        return bounded(
+            (long) (side == OrderBook.Side.BUY ? Math.floor(quoteCenter + distance)
+                : Math.ceil(quoteCenter - distance)));
     }
 
     public String checkpoint() {
@@ -403,6 +537,7 @@ public final class SimulatedInstrument {
         saved.settings = settings;
         saved.book = book.checkpoint();
         saved.candles = history.snapshot();
+        saved.chartCandles = chartHistory.snapshot();
         saved.fair = fairPrice;
         saved.dynamics = dynamics;
         saved.flow = flow;
@@ -436,9 +571,11 @@ public final class SimulatedInstrument {
             throw new IllegalArgumentException("Order price outside instrument bounds");
         }
         marketTick = Math.max(marketTick, gameTick);
+        retireAutomatedQuotes(gameTick);
         OrderBook.Result result = book.submit(owner, side, price, quantity, market, reduceOnly);
         for (OrderBook.Fill fill : result.fills) {
             history.fill(gameTick, fill.price, fill.quantity);
+            chartHistory.fill(gameTick, fill.price, fill.quantity);
             lastPrice = fill.price;
             volume = Math.addExact(volume, fill.quantity);
             flow = Math.max(-1, Math.min(1, flow * 0.95 + (side == OrderBook.Side.BUY ? 1 : -1) * 0.05));
@@ -448,6 +585,8 @@ public final class SimulatedInstrument {
                     notifyTake(entry.getKey(), protection, fill.quantity, fill.price, gameTick);
             }
         }
+        if (!market && result.order.remaining > 0 && book.isActive(result.order.id) && automatedOwners.contains(owner))
+            automatedQuotes.put(result.order.id, new AutomatedQuote(owner, result.order.price, gameTick));
         checkProtections(gameTick);
         return result;
     }
@@ -464,7 +603,9 @@ public final class SimulatedInstrument {
 
     public Snapshot snapshot(long gameTick) {
         marketTick = Math.max(marketTick, gameTick);
+        retireAutomatedQuotes(gameTick);
         history.advance(gameTick);
+        chartHistory.advance(gameTick);
         return new Snapshot(this);
     }
 
@@ -480,44 +621,34 @@ public final class SimulatedInstrument {
         if (average <= 0) average = lastPrice > 0 ? lastPrice : fairPrice;
         fairPrice = Math.max(settings.lowerPrice, Math.min(settings.upperPrice, dynamics.noisyFair(average, settings)));
         flow *= 0.95;
+        double desired = fairPrice + dynamics.quotePremium(settings, fairPrice)
+            + flow * Math.max(settings.volatility * 3, fairPrice * 0.001);
+        double maxMove = Math.max(1, quoteCenter * settings.makerRepriceBpsPerSecond / 100000D);
+        quoteCenter = Math.max(
+            settings.lowerPrice,
+            Math.min(settings.upperPrice, quoteCenter + Math.max(-maxMove, Math.min(maxMove, desired - quoteCenter))));
+        retireAutomatedQuotes(gameTick);
     }
 
     /** Register from the worker thread before opening the player command endpoint. */
     public void addBot(MarketWorker worker, Strategy strategy, int index, long seed, long interval,
         double probability) {
-        UUID owner = UUID
-            .nameUUIDFromBytes(("nhkantan:" + id + ":" + strategy + ":" + index).getBytes(StandardCharsets.UTF_8));
-        provisionBot(owner, strategy);
-        // An older checkpoint may contain passive quotes from now-disabled extra instances.
-        if (index == 0) for (int retired = 2; retired < 100; retired++) {
-            UUID retiredOwner = UUID.nameUUIDFromBytes(
-                ("nhkantan:" + id + ":" + strategy + ":" + retired).getBytes(StandardCharsets.UTF_8));
-            for (OrderBook.Order order : orders(retiredOwner)) book.cancel(retiredOwner, order.id);
-        }
+        UUID owner = botOwner(strategy, index);
+        ledger.provisionInstitution(
+            owner,
+            settings.institutionalCapitalCents,
+            settings.botCashCents,
+            settings.institutionalPositionLimit);
         Random random = new Random(seed ^ owner.getLeastSignificantBits());
         double pace = (index & 1) == 0 ? 0.85 : 1.15;
-        long period = Math.max(100, Math.min(86400000L, Math.round(interval * pace)));
+        double makerPace = strategy == Strategy.MARKET_MAKER ? settings.makerIntervalScale : 1;
+        long period = Math.max(100, Math.min(86400000L, Math.round(interval * pace * makerPace)));
         worker.schedule(
             seed ^ owner.getMostSignificantBits(),
             period,
             settings.jitter,
             probability,
             () -> act(owner, strategy, random, worker.gameTick(), index));
-    }
-
-    private long botPositionLimit(Strategy strategy) {
-        return strategy == Strategy.WHALE ? Math.max(1, settings.institutionalPositionLimit / 3)
-            : settings.institutionalPositionLimit;
-    }
-
-    private void provisionBot(UUID owner, Strategy strategy) {
-        long existing = ledger.hasAccount(owner) ? Math.abs(ledger.position(owner, id).quantity) : 0;
-        // Preserve an existing oversize position, but ratchet the reservation ceiling down as it closes.
-        ledger.provisionInstitution(
-            owner,
-            settings.institutionalCapitalCents,
-            settings.botCashCents,
-            strategy == Strategy.WHALE ? Math.max(botPositionLimit(strategy), existing) : botPositionLimit(strategy));
     }
 
     void act(UUID owner, Strategy strategy, Random random, long gameTick) {
@@ -551,9 +682,11 @@ public final class SimulatedInstrument {
             < 0.5 + dynamics.pressure() * (dynamics.burst() ? 0.45 : strategy == Strategy.WHALE ? 0.35 : 0.22) ? 1 : -1;
         if (signal == 0) return;
         long inventory = ledger.position(owner, id).quantity;
-        long positionLimit = botPositionLimit(strategy);
-        if (strategy == Strategy.WHALE) provisionBot(owner, strategy);
-        long softLimit = Math.max(1, positionLimit * 3 / 4);
+        long softLimit = Math.max(
+            1,
+            ledger.instrument(id)
+                .positionLimit(owner) * 3
+                / 4);
         // Inventory-constrained participants take profits rather than eventually becoming permanently inactive.
         if (inventory >= softLimit) signal = -1;
         else if (inventory <= -softLimit) signal = 1;
@@ -563,21 +696,21 @@ public final class SimulatedInstrument {
             : Math.max(1, settings.baseOrderSize / 3) + (long) (random.nextDouble() * settings.baseOrderSize);
         if (dynamics.burst()) quantity = Math.multiplyExact(quantity, 3);
         quantity = Math.max(1, (long) (quantity * volumeScale));
-        boolean reduceOnly = strategy == Strategy.WHALE && Math.abs(inventory) > positionLimit;
-        if (strategy == Strategy.WHALE) {
-            long room = reduceOnly ? Math.abs(inventory) - positionLimit
-                : positionLimit - (side == OrderBook.Side.BUY ? inventory : -inventory);
-            quantity = Math.min(quantity, room);
-            if (quantity < 1) return;
-        }
+        if (strategy == Strategy.WHALE) quantity = Math.min(quantity, settings.whaleMaxOrderContracts);
         quantity = Math.min(
             quantity,
             ledger.instrument(id)
                 .positionLimit(owner));
         boolean market = strategy != Strategy.NOISE || random.nextDouble() < (fast ? 0.65 : 0.4);
-        long price = market ? (side == OrderBook.Side.BUY ? settings.upperPrice : settings.lowerPrice)
+        retireAutomatedQuotes(gameTick);
+        long price = market ? automatedExecutionLimit(side)
             : bounded(reference + (side == OrderBook.Side.BUY ? -1 : 1) * (1 + random.nextInt(5)));
-        submit(owner, side, price, quantity, market, reduceOnly, gameTick);
+        if (market) {
+            long available = book.executableDepth(side, price);
+            if (available == 0) return;
+            quantity = Math.min(quantity, Math.max(1, (long) (available * settings.botMaxLiquidityFraction)));
+        }
+        submit(owner, side, price, quantity, market, false, gameTick);
     }
 
     private void maintainQuotes(UUID owner, Random random, long gameTick, int index) {
@@ -602,8 +735,15 @@ public final class SimulatedInstrument {
             }
         }
         long inventory = ledger.position(owner, id).quantity;
-        double center = fairPrice + dynamics.quotePremium(settings, fairPrice) - inventory * 0.01;
-        center += flow * Math.max(settings.volatility * 3, fairPrice * 0.001);
+        boolean fast = (index & 1) == 0;
+        double halfSpread = quoteHalfSpread(fast ? 0.9 : 1.15);
+        double skewCap = Math.min(halfSpread * 0.75, quoteCenter * settings.makerInventorySkewBps / 10000D);
+        double inventoryRatio = inventory / (double) Math.max(
+            1,
+            ledger.instrument(id)
+                .positionLimit(owner) * 3
+                / 4);
+        double center = quoteCenter - Math.max(-1, Math.min(1, inventoryRatio)) * skewCap;
         long softLimit = Math.max(
             1,
             ledger.instrument(id)
@@ -617,10 +757,10 @@ public final class SimulatedInstrument {
             // Rebuild a few missing levels after a large sweep, rather than replenishing one tiny order per action.
             int replenishments = Math.min(3, Math.max(0, settings.depth - count));
             for (int level = 0; level < replenishments; level++) {
-                long distance = 1 + random.nextInt(settings.depth) + level;
+                long distance = (long) halfSpread + 1 + random.nextInt(settings.depth) + level;
                 long price = bounded(Math.round(center) + (side == OrderBook.Side.BUY ? -distance : distance));
                 double quoteBase = settings.baseOrderSize * (double) settings.makerQuoteSizeMultiplier
-                    * ((index & 1) == 0 ? 0.8 : 1.2);
+                    * (fast ? 0.8 : 1.2);
                 long quantity = Math.min(
                     ledger.instrument(id)
                         .positionLimit(owner),

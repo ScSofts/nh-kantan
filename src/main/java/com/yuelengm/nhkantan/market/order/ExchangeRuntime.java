@@ -403,7 +403,8 @@ public final class ExchangeRuntime implements AutoCloseable {
                 .submit(
                     owner,
                     difference > 0 ? OrderBook.Side.BUY : OrderBook.Side.SELL,
-                    difference > 0 ? market.upperPrice : market.lowerPrice,
+                    entry.getValue()
+                        .automatedExecutionLimit(difference > 0 ? OrderBook.Side.BUY : OrderBook.Side.SELL),
                     count,
                     true,
                     false,

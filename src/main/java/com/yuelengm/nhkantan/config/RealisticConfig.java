@@ -53,10 +53,54 @@ public class RealisticConfig {
     @Config.RangeInt(min = 1, max = 100000000)
     public static int botInitialCash;
 
-    @Config.Comment("Passive market-maker order size multiplier relative to the 9f8f1e5 baseline.")
+    @Config.Comment("Total market-maker spread in basis points, before depth offsets.")
+    @Config.DefaultInt(10)
+    @Config.RangeInt(min = 1, max = 200)
+    public static int makerSpreadBps;
+
+    @Config.Comment("Maximum inventory quote skew in basis points; also capped below half the spread.")
+    @Config.DefaultInt(5)
+    @Config.RangeInt(min = 0, max = 100)
+    public static int makerInventorySkewBps;
+
+    @Config.Comment("Maximum common market-maker reference movement per active second, in basis points.")
+    @Config.DefaultInt(120)
+    @Config.RangeInt(min = 1, max = 1000)
+    public static int makerRepriceBpsPerSecond;
+
+    @Config.Comment("Cancel only automated passive quotes outside this reference band; manual orders are preserved.")
+    @Config.DefaultInt(30)
+    @Config.RangeInt(min = 1, max = 1000)
+    public static int automatedQuoteBandBps;
+
+    @Config.DefaultInt(2)
+    @Config.RangeInt(min = 1, max = 60)
+    public static int automatedQuoteLifetimeSeconds;
+
+    @Config.Comment("Worst-price protection for robot and option-hedge market IOC orders, in basis points.")
+    @Config.DefaultInt(20)
+    @Config.RangeInt(min = 1, max = 500)
+    public static int botMaxSlippageBps;
+
+    @Config.Comment("Maximum fraction of currently executable opposite-side liquidity consumed per robot action.")
+    @Config.DefaultDouble(0.25)
+    @Config.RangeDouble(min = 0.01, max = 1)
+    public static double botMaxLiquidityFraction;
+
+    @Config.Comment("Extra size multiplier for passive market-maker orders only; ordinary bot trades keep their base size.")
     @Config.DefaultInt(3)
     @Config.RangeInt(min = 1, max = 100)
     public static int makerQuoteSizeMultiplier;
+
+    @Config.Comment("Market-maker interval multiplier; 0.4 turns the former 500 ms base into about 200 ms before per-instance pacing.")
+    @Config.DefaultDouble(0.4)
+    @Config.RangeDouble(min = 0.05, max = 2)
+    public static double makerIntervalScale;
+
+    @Config.Comment("Hard maximum quantity per whale action, including a breakout burst; may still be reduced by liquidity/risk limits.")
+    @Config.DefaultInt(5000)
+    @Config.RangeInt(min = 1, max = 100000)
+    public static int whaleMaxOrderContracts;
 
     @Config.Comment("Institution capital is botInitialCash times this factor. Increases are granted once; losses are not reset.")
     @Config.DefaultInt(100)
@@ -225,10 +269,16 @@ public class RealisticConfig {
             makerQuoteSizeMultiplier = 3;
             NHKantan.LOG.info("Adjusted former 10x market-maker default to 3x quote size");
         }
-        int[] pairedCounts = { 2, 2, 2, 2, 2 };
-        if (!java.util.Arrays.equals(botCounts, pairedCounts))
-            NHKantan.LOG.info("Using two independently parameterized instances per strategy");
-        botCounts = pairedCounts;
+        int minimumBand = Math.max(makerSpreadBps, botMaxSlippageBps);
+        if (automatedQuoteBandBps < minimumBand) {
+            automatedQuoteBandBps = minimumBand;
+            corrected("automatedQuoteBandBps (spread/slippage floor)");
+        }
+        if (java.util.Arrays.equals(botCounts, new int[] { 3, 4, 4, 8, 1 })) {
+            botCounts = new int[] { 2, 2, 2, 2, 2 };
+            NHKantan.LOG.info("Migrated former default institution counts to two distinct instances per strategy");
+        }
+        botCounts = profile(botCounts, new int[] { 2, 2, 2, 2, 2 }, 0, 100);
         botIntervalsMillis = profile(botIntervalsMillis, new int[] { 500, 700, 800, 350, 12000 }, 100, 86400000);
         double[] defaults = { 0.9, 0.65, 0.6, 0.75, 0.15 };
         double[] probabilities = new double[5];

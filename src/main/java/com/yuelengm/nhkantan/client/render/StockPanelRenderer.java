@@ -243,15 +243,44 @@ public class StockPanelRenderer {
             int color = candle.isRising() ? COLOR_UP : COLOR_DOWN;
             float wickTop = scale.y(candle.high());
             float wickBottom = scale.y(candle.low());
-            quad(tessellator, cx - unit * 0.25F, wickTop, cx + unit * 0.25F, wickBottom, z, color);
             float top = scale.y(Math.max(candle.open(), candle.close()));
             float bottom = scale.y(Math.min(candle.open(), candle.close()));
+            float normalWick = Math.max(unit * 4, (bottom - top) * 2);
+            drawWick(tessellator, cx, top, wickTop, normalWick, unit, z, color);
+            drawWick(tessellator, cx, bottom, wickBottom, normalWick, unit, z, color);
             if (bottom - top < minBody) {
                 float center = (top + bottom) * 0.5F;
                 top = center - minBody * 0.5F;
                 bottom = center + minBody * 0.5F;
             }
             quad(tessellator, cx - bodyHalf, top, cx + bodyHalf, bottom, z, color);
+        }
+    }
+
+    /** Keep true high/low endpoints; only fade unusually long tails into the background. */
+    private static void drawWick(Tessellator tessellator, float cx, float body, float tip, float normalLength,
+        float unit, float z, int color) {
+        float length = Math.abs(tip - body);
+        if (length == 0) return;
+        float direction = Math.signum(tip - body);
+        float core = Math.min(length, normalLength);
+        float edge = body + direction * core;
+        quad(tessellator, cx - unit * 0.25F, Math.min(body, edge), cx + unit * 0.25F, Math.max(body, edge), z, color);
+        for (int i = 0; i < 4 && core < length; i++) {
+            float start = edge + direction * (length - core) * i / 4;
+            float end = edge + direction * (length - core) * (i + 1) / 4;
+            float strength = 0.5F - i * 0.1F;
+            int red = Math.round(((COLOR_BACKGROUND >> 16) & 255) * (1 - strength) + ((color >> 16) & 255) * strength);
+            int green = Math.round(((COLOR_BACKGROUND >> 8) & 255) * (1 - strength) + ((color >> 8) & 255) * strength);
+            int blue = Math.round((COLOR_BACKGROUND & 255) * (1 - strength) + (color & 255) * strength);
+            quad(
+                tessellator,
+                cx - unit * 0.25F,
+                Math.min(start, end),
+                cx + unit * 0.25F,
+                Math.max(start, end),
+                z,
+                (red << 16) | (green << 8) | blue);
         }
     }
 
