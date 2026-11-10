@@ -254,3 +254,8 @@ python3 /workspace/.cloud-setup/server-status.py
 
 - 强平通知：marginCycle在保证金不足时为每个玩家/品种首次强平触发创建LIQUIDATION_TRIGGERED私人事件，进入既有AE浮窗与声音通道，不按页面抑制。目标数量与触发参考价不代表已经全部成交。连续强平/部分成交重试不重复刷屏；去重状态随检查点保存，风险恢复或空仓后复位，之后新风险可再次提醒；机器人不写玩家通知。枚举追加到末尾，保留旧事件序号。
 - 本次只spotlessApply assemble，未运行Java/MC测试，实际浮窗和音效待人工确认。产物build/libs/nhkantan-liquidation-notify.jar。
+
+### CI 测试维护（2026-11-10）
+
+- 用户提供35项测试1失败的摘要，未包含用例详情；本地一轮test复现2失败：AtomicMarketStoreTest清理遗漏legacy-backup目录、ExchangeRuntimeTest机器人采样命令可能同泵完成而事件尚未执行。前者递归清理临时目录并新增备份字节保留断言；后者按8秒截止时间轮询、间隔25ms让出执行机会并维持活动时钟，继续要求真实撮合。不要删除测试/备份或修改行情算法来绕过。
+- 本次用户要求排查CI，因此仅针对本任务执行现有Java测试及完整build；这是此前“只打包”约束的任务内例外。不启动MC。`spotlessApply build`通过，35项测试0失败/0错误/0跳过，Spotless与主代码/测试Checkstyle通过；该结果是本地验证，未取得GitHub后续重跑结果。

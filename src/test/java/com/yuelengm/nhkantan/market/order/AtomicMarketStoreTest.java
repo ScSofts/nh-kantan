@@ -45,16 +45,15 @@ public class AtomicMarketStoreTest {
             assertFalse(Files.exists(positions));
             assertFalse(Files.exists(history));
             assertTrue(Files.exists(unrelated));
+            Path backup = world.resolve("nhkantan/legacy-backup");
+            assertArrayEquals(new byte[] { 1 }, Files.readAllBytes(backup.resolve("nhkantan_wallets.dat")));
+            assertArrayEquals(new byte[] { 1 }, Files.readAllBytes(backup.resolve("nhkantan_positions.dat")));
+            assertArrayEquals(new byte[] { 1 }, Files.readAllBytes(backup.resolve("prices/stock.prices")));
         } finally {
-            Files.deleteIfExists(wallet);
-            Files.deleteIfExists(positions);
-            Files.deleteIfExists(unrelated);
-            Files.deleteIfExists(price);
-            Files.deleteIfExists(history);
-            Files.deleteIfExists(checkpoint);
-            Files.deleteIfExists(data);
-            Files.deleteIfExists(world.resolve("nhkantan"));
-            Files.deleteIfExists(world);
+            try (java.util.stream.Stream<Path> paths = Files.walk(world)) {
+                for (Path path : paths.sorted(java.util.Comparator.reverseOrder())
+                    .collect(java.util.stream.Collectors.toList())) Files.delete(path);
+            }
         }
     }
 

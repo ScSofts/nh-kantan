@@ -80,12 +80,17 @@ public class ExchangeRuntimeTest {
                     42)
                 .get(1, TimeUnit.SECONDS);
             SimulatedInstrument.Snapshot snapshot = null;
-            for (int i = 0; i < 40; i++) {
-                runtime.clock(true, i);
+            long started = System.nanoTime();
+            long deadline = started + TimeUnit.SECONDS.toNanos(8);
+            while (System.nanoTime() < deadline) {
+                runtime.clock(true, TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started) / 50);
                 snapshot = runtime.publicSnapshot()
                     .get(1, TimeUnit.SECONDS)
                     .get("stock");
                 if (snapshot.volume > 0) break;
+                // Snapshot commands may all drain in one worker pump, before scheduled bot events run.
+                // Yield between polls and keep the active-clock heartbeat alive while waiting for a real fill.
+                Thread.sleep(25);
             }
             assertNotNull(snapshot);
             assertTrue("Bots never produced an actual matched fill", snapshot.volume > 0);
