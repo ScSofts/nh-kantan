@@ -320,7 +320,15 @@ public final class ExchangeGui implements IGuiHolder<GuiData> {
                 boolean rejected = error != null || Boolean.FALSE.equals(value)
                     || (value instanceof OrderBook.Result
                         && ((OrderBook.Result) value).order.status == OrderBook.Status.REJECTED);
-                target.set(rejected ? "REJECTED" : "OK");
+                String code = rejected ? "REJECTED" : "OK";
+                if (value instanceof OrderBook.Result) {
+                    OrderBook.Result order = (OrderBook.Result) value;
+                    if (order.order.status == OrderBook.Status.REJECTED && order.rejectionReason != null
+                        && !order.rejectionReason.isEmpty()) code = order.rejectionReason;
+                    else if (order.fills.isEmpty() && order.order.status == OrderBook.Status.CANCELLED)
+                        code = "NO_LIQUIDITY";
+                }
+                target.set(code);
             });
         }
 
@@ -328,9 +336,13 @@ public final class ExchangeGui implements IGuiHolder<GuiData> {
             if (!localError.isEmpty()) return "§c" + IKey.lang("gui.nhkantan.exchange.invalid_input")
                 .get();
             String code = feedback.getStringValue();
-            return ("REJECTED".equals(code) ? "§c" : "PENDING".equals(code) ? "§e" : "§b") + IKey.lang(
-                "gui.nhkantan.exchange.status." + (code.isEmpty() ? "ready" : code.toLowerCase(java.util.Locale.ROOT)))
-                .get();
+            return (!code.isEmpty() && !"OK".equals(code) && !"PENDING".equals(code) ? "§c"
+                : "PENDING".equals(code) ? "§e" : "§b")
+                + IKey
+                    .lang(
+                        "gui.nhkantan.exchange.status."
+                            + (code.isEmpty() ? "ready" : code.toLowerCase(java.util.Locale.ROOT)))
+                    .get();
         }
 
         private String effectiveLeverage() {
@@ -345,7 +357,12 @@ public final class ExchangeGui implements IGuiHolder<GuiData> {
             String value = gross == 0 ? "0.00"
                 : account.account.equity <= 0 ? "∞"
                     : String.format(java.util.Locale.ROOT, "%.2f", gross / account.account.equity);
-            return IKey.lang("gui.nhkantan.exchange.effective_leverage", value)
+            return IKey
+                .lang(
+                    "gui.nhkantan.exchange.leverage_limits",
+                    value,
+                    String.format(java.util.Locale.ROOT, "%.0f", 10000D / frame.marginBps),
+                    frame.maxPosition)
                 .get();
         }
 

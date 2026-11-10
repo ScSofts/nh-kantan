@@ -40,6 +40,10 @@ public final class OrderBook {
 
         boolean reserve(Order order);
 
+        default String rejectionReason() {
+            return "REJECTED";
+        }
+
         /** May restrict a reduce-only order to its remaining closable position. */
         long executable(Order order);
 
@@ -100,8 +104,14 @@ public final class OrderBook {
 
         public final Order order;
         public final List<Fill> fills;
+        public final String rejectionReason;
 
         private Result(Entry entry, List<Fill> fills) {
+            this(entry, fills, "");
+        }
+
+        private Result(Entry entry, List<Fill> fills, String rejectionReason) {
+            this.rejectionReason = rejectionReason;
             order = new Order(entry);
             this.fills = Collections.unmodifiableList(new ArrayList<>(fills));
         }
@@ -226,7 +236,7 @@ public final class OrderBook {
         }
         if (!settlement.reserve(new Order(incoming))) {
             incoming.status = Status.REJECTED;
-            return new Result(incoming, fills);
+            return new Result(incoming, fills, settlement.rejectionReason());
         }
         NavigableMap<Long, Deque<Entry>> opposite = levels(side.opposite());
         while (incoming.remaining > 0 && !opposite.isEmpty()) {

@@ -17,6 +17,7 @@ public final class ClientExchangeData {
         public long revision;
         public int tickValueCents;
         public int marginBps;
+        public long maxPosition;
         public int commissionPpm;
         public boolean unavailable;
         public Map<String, String> names = Collections.emptyMap();

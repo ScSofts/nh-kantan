@@ -349,6 +349,7 @@ public final class RealisticService {
         frame.revision = ++revision;
         frame.tickValueCents = RealisticConfig.tickValueCents;
         frame.marginBps = RealisticConfig.initialMarginBps;
+        frame.maxPosition = RealisticConfig.maxPosition;
         frame.commissionPpm = RealisticConfig.commissionPpm;
         frame.names = names;
         frame.instruments = instruments;

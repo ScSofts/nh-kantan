@@ -244,3 +244,8 @@ python3 /workspace/.cloud-setup/server-status.py
 - 交易页余额下新增等效杠杆：所有合约绝对持仓量×当前成交价×tickValueCents之和/账户权益；不包含期权，空仓0，持仓且非正权益显示∞。
 - realistic.initialMarginBps 为服务端可配置项，范围10–10000，10=0.1%=理论1000倍；默认1000=10%保持。已有世界恢复账本后、恢复订单前应用配置并重建冻结额，实际占用保证金与UI一致。调低配置可能影响强平判断；维持保证金超出初始保证金时仍按一半归一化。
 - 本次仅 spotlessApply assemble，不执行Java测试/MC，无行情算法变更，15秒K线与通知沿用；产物 build/libs/nhkantan-balance-leverage.jar。
+
+### 千倍交易配套限额（2026-11-10）
+
+- 千倍交易配套修复：默认 initialMarginBps=10（0.1%）、maintenanceMarginBps=5、maxPosition=10000000；可配置玩家限仓范围1–1000000000。limitsConfigVersion=0时，仅将旧默认1000/500/1000分别迁移为10/5/10000000，写入版本1并通过GTNHLib保存配置，之后不再覆盖自定义值。旧世界在恢复订单前同时应用保证金率和玩家限仓，机构限仓不变。UI区分账户实际杠杆、品种理论杠杆、每品种限仓；拒单区分限仓、资金不足、减仓数量、参数、计算范围、无对手盘。理论1000倍仍受手续费、整数分取整、卖单按价格上界预留、可用资金和有限盘口约束，不能保证每笔达到1000倍或全部成交。
+- 截图900张再买200被旧1000张上限拦截，0.74倍本身计算正确；修复与行情算法无关，15秒图与通知沿用。仅spotlessApply assemble，未运行Java测试/MC；产物build/libs/nhkantan-1000x-fix.jar。

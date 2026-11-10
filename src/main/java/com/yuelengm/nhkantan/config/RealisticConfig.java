@@ -23,12 +23,12 @@ public class RealisticConfig {
     public static int tickValueCents;
 
     @Config.Comment("Initial margin in basis points: 10 = 0.1% (1000x), 1000 = 10%. Configurable on server restart.")
-    @Config.DefaultInt(1000)
+    @Config.DefaultInt(10)
     @Config.RangeInt(min = 10, max = 10000)
     public static int initialMarginBps;
 
     @Config.Comment("Maintenance margin in basis points; must not exceed initial margin.")
-    @Config.DefaultInt(500)
+    @Config.DefaultInt(5)
     @Config.RangeInt(min = 0, max = 10000)
     public static int maintenanceMarginBps;
 
@@ -37,9 +37,14 @@ public class RealisticConfig {
     @Config.RangeInt(min = 0, max = 1000000)
     public static int commissionPpm;
 
-    @Config.DefaultInt(1000)
-    @Config.RangeInt(min = 1, max = 1000000)
+    @Config.Comment("Player contracts per instrument, including same-side resting orders.")
+    @Config.DefaultInt(10000000)
+    @Config.RangeInt(min = 1, max = 1000000000)
     public static int maxPosition;
+
+    @Config.Comment("One-time migration version for former 10% margin / 1000-contract defaults.")
+    @Config.DefaultInt(0)
+    public static int limitsConfigVersion;
 
     @Config.DefaultInt(8)
     @Config.RangeInt(min = 1, max = 100)

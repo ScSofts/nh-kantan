@@ -309,7 +309,7 @@ public final class MarginLedger {
             || feePpm < 0
             || feePpm > 1000000
             || maxPosition < 1
-            || maxPosition > 1000000
+            || maxPosition > 1000000000
             || maximumPrice < 1) {
             throw new IllegalArgumentException("Invalid or duplicate instrument rules");
         }
@@ -319,11 +319,17 @@ public final class MarginLedger {
     }
 
     /** Apply server margin settings before restoring any order reservations. */
-    public void configureMargin(String id, int marginBps) {
+    public void configureMargin(String id, int marginBps, long maxPosition) {
         Instrument instrument = instruments.get(id);
         if (instrument == null || marginBps < 10 || marginBps > 10000 || !instrument.reservations.isEmpty())
             throw new IllegalArgumentException("Cannot reconfigure margin with active reservations");
+        if (maxPosition < 1 || maxPosition > 1000000000) throw new IllegalArgumentException("Invalid player limit");
+        for (Account account : accounts.values())
+            if (account.institutionalPositionLimit == 0 && account.positions.containsKey(id)
+                && Math.abs(account.positions.get(id).quantity) > maxPosition)
+                throw new IllegalArgumentException("Player limit is below an existing position");
         instrument.marginBps = marginBps;
+        instrument.maxPosition = maxPosition;
     }
 
     public final class Instrument implements OrderBook.Settlement {
@@ -332,7 +338,7 @@ public final class MarginLedger {
         private final long tickValue;
         private int marginBps;
         private final int feePpm;
-        private final long maxPosition;
+        private long maxPosition;
         private final long maximumPrice;
         private long lastPrice;
         private final Map<Long, Reservation> reservations = new HashMap<>();
@@ -355,11 +361,21 @@ public final class MarginLedger {
             return account.institutionalPositionLimit > 0 ? account.institutionalPositionLimit : maxPosition;
         }
 
+        private String rejectionReason = "REJECTED";
+
+        @Override
+        public String rejectionReason() {
+            return rejectionReason;
+        }
+
         @Override
         public boolean reserve(OrderBook.Order order) {
+            rejectionReason = "INVALID_ORDER";
             Account account = accounts.get(order.owner);
-            if (account == null || order.quantity > positionLimit(order.owner) || order.price > maximumPrice)
-                return false;
+            if (account == null || order.price > maximumPrice) return false;
+            rejectionReason = "POSITION_LIMIT";
+            if (order.quantity > positionLimit(order.owner)) return false;
+            rejectionReason = "REDUCE_ONLY";
             if (order.reduceOnly && executable(order) < order.quantity) return false;
             try {
                 if (!order.reduceOnly) {
@@ -369,8 +385,11 @@ public final class MarginLedger {
                         if (reservation.account == account && reservation.side == order.side)
                             exposure = Math.addExact(exposure, Math.multiplyExact(sign, reservation.quantity));
                     }
+                    rejectionReason = "POSITION_LIMIT";
                     if (Math.abs(Math.addExact(exposure, Math.multiplyExact(sign, order.quantity)))
-                        > positionLimit(order.owner) || account.cash < 0) return false;
+                        > positionLimit(order.owner)) return false;
+                    rejectionReason = "INSUFFICIENT_FUNDS";
+                    if (account.cash < 0) return false;
                 }
                 // Both sides reserve worst-case notional, so a resting order cannot spend someone else's collateral.
                 long reservePrice = order.side == OrderBook.Side.SELL ? maximumPrice : order.price;
@@ -381,11 +400,13 @@ public final class MarginLedger {
                 long available = Math.subtractExact(
                     Math.subtractExact(equity(account), usedMargin(account)),
                     Math.addExact(account.frozen, account.transferFrozen));
+                rejectionReason = "INSUFFICIENT_FUNDS";
                 if (frozen > available && frozen != 0) return false;
                 account.frozen = Math.addExact(account.frozen, frozen);
                 reservations.put(order.id, new Reservation(account, perUnit, order.quantity, order.side));
                 return true;
             } catch (ArithmeticException e) {
+                rejectionReason = "ARITHMETIC_LIMIT";
                 return false;
             }
         }

@@ -147,3 +147,5 @@ Python 先行对照采用简化价格/时间订单簿和机构模型：4 个种�
 仅 `bash gradlew --console=plain spotlessApply assemble`，最终下载产物 `build/libs/nhkantan-final.jar`；未模拟、未运行 Java 测试或 MC，等待人工反馈。
 
 余额/杠杆追加：旧钱包迁移优先直接读取 data/nhkantan_wallets.dat 的 NBT data 包装（也兼容直接根标签），BalancesCents 按分、旧 Balances 按整币换算，未知结构/非法UUID或非数值拒绝迁移，防止静默清零。清理前保留 legacy-backup 钱包/持仓文件及首次历史目录。已迁移世界继续读取 realistic.dat，不用旧钱包覆盖当前账户，玩家UUID必须保持一致。 UI展示实际合约等效杠杆；保证金率可配置，最低10bps=0.1%（理论1000倍），默认10%不变，重启时对旧世界重新应用。用户不要求代为恢复资金；仅编译打包，未运行Java/MC测试，未复现玩家具体问题。
+
+千倍交易配套修复：默认 initialMarginBps=10（0.1%）、maintenanceMarginBps=5、maxPosition=10000000；可配置玩家限仓范围1–1000000000。limitsConfigVersion=0时，仅将旧默认1000/500/1000分别迁移为10/5/10000000，写入版本1并通过GTNHLib保存配置，之后不再覆盖自定义值。旧世界在恢复订单前同时应用保证金率和玩家限仓，机构限仓不变。UI区分账户实际杠杆、品种理论杠杆、每品种限仓；拒单区分限仓、资金不足、减仓数量、参数、计算范围、无对手盘。理论1000倍仍受手续费、整数分取整、卖单按价格上界预留、可用资金和有限盘口约束，不能保证每笔达到1000倍或全部成交。 本次仅编译打包，未运行模拟或Java/MC测试，不调整行情算法。产物build/libs/nhkantan-1000x-fix.jar。

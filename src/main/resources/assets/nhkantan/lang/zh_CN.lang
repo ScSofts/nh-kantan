@@ -173,3 +173,17 @@ notification.nhkantan.option_expired.body=%s · 到期 %s 份
 notification.nhkantan.option_expired.detail=结算到账 %s
 
 gui.nhkantan.exchange.effective_leverage=等效杠杆 %s× · 合约持仓总名义价值 / 账户权益
+
+gui.nhkantan.exchange.leverage_limits=账户实际杠杆 %s× · 品种理论杠杆 %s× · 每品种限仓 %s 张
+
+gui.nhkantan.exchange.status.position_limit=超过品种限仓（含同方向活动挂单），请减少数量或取消挂单
+
+gui.nhkantan.exchange.status.insufficient_funds=可用资金不足以预留保证金与手续费（卖单按价格上界预留）
+
+gui.nhkantan.exchange.status.reduce_only=减仓数量超过当前可平持仓
+
+gui.nhkantan.exchange.status.invalid_order=账户、价格或订单参数无效
+
+gui.nhkantan.exchange.status.arithmetic_limit=金额超出安全计算范围
+
+gui.nhkantan.exchange.status.no_liquidity=价格保护范围内暂无可成交对手单，订单未成交

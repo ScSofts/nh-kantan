@@ -173,3 +173,17 @@ notification.nhkantan.option_expired.body=%s / %s contracts expired
 notification.nhkantan.option_expired.detail=Settlement credit %s
 
 gui.nhkantan.exchange.effective_leverage=Effective leverage %sx / Gross contract exposure divided by account equity
+
+gui.nhkantan.exchange.leverage_limits=Actual leverage %sx / Theoretical %sx / Position limit %s contracts per instrument
+
+gui.nhkantan.exchange.status.position_limit=Instrument position limit exceeded, including same-side open orders
+
+gui.nhkantan.exchange.status.insufficient_funds=Insufficient free funds for margin and fees (sell reserves use the price ceiling)
+
+gui.nhkantan.exchange.status.reduce_only=Reduce quantity exceeds closable position
+
+gui.nhkantan.exchange.status.invalid_order=Invalid account, price or order
+
+gui.nhkantan.exchange.status.arithmetic_limit=Monetary calculation limit exceeded
+
+gui.nhkantan.exchange.status.no_liquidity=No executable counterparty within the price protection range
