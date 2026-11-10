@@ -47,6 +47,9 @@ final class MarketDynamics {
     private int age;
     private int duration;
     private double fairNoise;
+    private double localDrift;
+    private double directionalPressure;
+    private double quotePremiumBps;
 
     MarketDynamics(double initialPrice, long seed) {
         if (!Double.isFinite(initialPrice)) {
@@ -73,6 +76,10 @@ final class MarketDynamics {
             || !inBounds(fundamentalPrice, lower, upper)
             || !Double.isFinite(transientImpact)
             || !Double.isFinite(fairNoise)
+            || !Double.isFinite(localDrift)
+            || !Double.isFinite(directionalPressure)
+            || !Double.isFinite(quotePremiumBps)
+            || Math.abs(directionalPressure) > 1.0
             || !inBounds(anchor, lower, upper)
             || !inBounds(start, lower, upper)
             || !inBounds(target, lower, upper)
@@ -99,9 +106,9 @@ final class MarketDynamics {
         age++;
 
         double progress = age / (double) duration;
-        double path = progress;
+        double path = progress * progress * (3.0 - 2.0 * progress);
         double noiseScale = settings.volatility * 0.45;
-        double speed = 0.10;
+        double speed = 0.065;
 
         switch (regime) {
             case RANGE -> {
@@ -111,23 +118,40 @@ final class MarketDynamics {
             }
             case REVERSION -> {
                 path = (1.0 - Math.exp(-3.0 * progress)) / (1.0 - Math.exp(-3.0));
+                speed = 0.07;
             }
             case BREAKOUT_UP, BREAKOUT_DOWN -> {
-                path = Math.min(1.0, progress / 0.22);
-                speed = 0.28;
-                if (progress < 0.22) {
-                    noiseScale *= 2.0;
+                double impulse = Math.min(1.0, progress / 0.55);
+                path = impulse * impulse * (3.0 - 2.0 * impulse);
+                speed = 0.16;
+                if (progress < 0.55) {
+                    noiseScale *= 1.5;
                 }
             }
             case TREND_UP, TREND_DOWN -> {
-                // Regular trend follows a gradually moving phase destination.
+                // Ease into and out of the trend instead of following a constant-speed ramp.
             }
         }
 
+        // Several seconds of local buying/selling pressure allow pullbacks within a larger trend.
+        // Persist this component across regime changes so a new phase does not reset short-term motion.
+        localDrift = clamp(
+            localDrift * 0.94 + gaussian() * settings.volatility * 0.22,
+            -settings.volatility * 2.0,
+            settings.volatility * 2.0);
         double destination = start + (target - start) * path;
         double fundamentalCandidate = fundamentalPrice + (destination - fundamentalPrice) * speed
+            + localDrift
             + gaussian() * noiseScale;
         fundamentalPrice = bound(fundamentalCandidate, settings);
+
+        double envelope = Math.min(1.0, progress / 0.12) * Math.min(1.0, (1.0 - progress) / 0.20);
+        double desiredPressure = regimePressure() * envelope;
+        directionalPressure += (desiredPressure - directionalPressure) * 0.06;
+        boolean breakout = regime == Regime.BREAKOUT_UP || regime == Regime.BREAKOUT_DOWN;
+        double shading = breakout ? Math.min(35.0, settings.breakoutMoveBps * 0.04)
+            : Math.min(20.0, settings.trendMoveBps * 0.025);
+        quotePremiumBps += (shading * directionalPressure - quotePremiumBps) * 0.10;
 
         // Flow moves the *level* temporarily. It must not be added to the
         // fundamental price on every tick, which would accumulate indefinitely.
@@ -193,6 +217,10 @@ final class MarketDynamics {
      * Hidden directional signal for staggered bot decisions.
      */
     double pressure() {
+        return directionalPressure;
+    }
+
+    private double regimePressure() {
         if (regime == null || regime == Regime.RANGE) {
             return 0.0;
         }
@@ -210,9 +238,9 @@ final class MarketDynamics {
      * Inventory-neutral directional quote shading; never changes VWAP.
      */
     double quotePremium(SimulatedInstrument.Settings settings, double fairValue) {
-        boolean breakout = regime == Regime.BREAKOUT_UP || regime == Regime.BREAKOUT_DOWN;
-        double bps = breakout ? settings.breakoutMoveBps * 0.5 : settings.trendMoveBps * 0.35;
-        return fairValue * bps / 10000.0 * pressure();
+        // Phase displacement is already in the fundamental. Adding a large second premium creates
+        // an artificial price cliff when the regime ends; keep quote shading small and continuous.
+        return fairValue * quotePremiumBps / 10000.0;
     }
 
     /**

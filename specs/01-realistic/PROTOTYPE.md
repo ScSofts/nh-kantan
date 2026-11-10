@@ -129,3 +129,11 @@ Python 先行对照采用简化价格/时间订单簿和机构模型：4 个种�
 `bash gradlew --console=plain spotlessApply assemble` 通过；未运行 Java 测试、runServer、runClient。配置说明见 `../../docs/REALISTIC_CONFIG.md`，实际盘口、声音提醒及玩家操作留待人工反馈。
 
 新 JAR：`build/libs/nhkantan-liquidity-fix.jar`，SHA-256 `14febd236e8b36130cdea2f0fdee038ea28daec19bff3a6a7f15d66239dccacd`。
+
+## 最新行情微调与 3 倍盘口（2026-11-10）
+
+趋势改为缓入缓出，并叠加跨阶段的短期相关扰动；方向压力淡入淡出、连续跟随；原本与整段涨幅挂钩的大报价溢价改为小额基点并平滑，减少规律爬坡后的阶段断崖。突破推进窗口由前 22% 延至 55%，保留趋势/突破幅度参数。
+
+做市挂单倍率由 10 改为 3，默认目标约 720–3240 张/档；旧 cfg 中的 10 在内存迁移为 3。补单频率、双实例、巨鲸上限、真实成交 OHLC 沿用。新增动态状态随检查点保存，旧存档缺失字段为零，不清空账户或历史。
+
+仅执行 `bash gradlew --console=plain spotlessApply assemble`，不运行 Python 模拟、Java 测试或 MC；此前模拟统计不适用于本版，走势由用户人工体验。产物 `build/libs/nhkantan-market-tuning.jar`。

@@ -37,13 +37,15 @@
 | `institutionalOrderMultiplier` | 100 | 原基础下单数量的放大倍数 |
 | `institutionalPositionLimit` | 100000 | 机构仓位上限，不改变玩家上限 |
 
-## Python 先行验证
+## 此前版本的 Python 验证工具
 
 ```bash
 python3 tools/simulate_market.py
 python3 tools/simulate_market.py --config /path/to/nhkantan.cfg
 # 也支持 JSON 参数覆盖；默认参数从 RealisticConfig.java 的注解读取。
 ```
+
+最新行情微调按用户要求未运行模拟，以下 Python 工具保留此前模型，尚未同步最新 Java 走势逻辑，不代表当前算法验证结果。
 
 报告在 `build/reports/python-market/`（指定配置时可用 `--output` 另选目录），包含参考序列 CSV、阶段切换、有效配置和摘要。默认验证 16 个种子、各 30 分钟，覆盖六种状态、序列化恢复和非法配置归一化。VWAP 反馈使用 Python 参考序列和代理成交量，不等同于 Minecraft 内的完整撮合验证。
 
@@ -55,7 +57,7 @@ python3 tools/simulate_market.py --config /path/to/nhkantan.cfg
 
 | 参数 | 默认 | 作用 |
 | --- | --- | --- |
-| `makerQuoteSizeMultiplier` | 10 | 只把做市被动挂单再加厚 10 倍，普通主动单不一起放大 |
+| `makerQuoteSizeMultiplier` | 3 | 只把做市被动挂单再加厚 3 倍，普通主动单不一起放大 |
 | `makerIntervalScale` | 0.4 | 原 500ms 基准约变为 200ms，再叠加快/慢实例节奏、抖动与工作线程粒度 |
 | `whaleMaxOrderContracts` | 5000 | 巨鲸单次硬上限，包含突破期的放大后数量 |
 | `makerSpreadBps` | 10 | 基础买卖总价差，随后加盘口档位距离 |
@@ -66,8 +68,14 @@ python3 tools/simulate_market.py --config /path/to/nhkantan.cfg
 | `botMaxSlippageBps` | 20 | 机器人/期权对冲 IOC 最差价保护，另有最小 tick/档位底线 |
 | `botMaxLiquidityFraction` | 0.25 | 一次机器人主动单最多按估计对手盘可成交深度的 25% 下单 |
 
-默认做市单目标约为 2400–10800 张/档（两实例分别约 2400–7200 / 3600–10800），受机构资金和限仓约束。趋势/突破阶段参数未降低；报价参考加速跟随到 120bps/秒，避免通过把市场压平来消除影线。上述保护约束单次报价和机器人订单，**不限制一段趋势的累计涨跌幅**。
+旧配置中的原默认倍率 10 会在本次运行中迁移到 3，不重写 cfg；其他自定义倍率保留。默认做市单目标约为 720–3240 张/档（两实例分别约 720–2160 / 1080–3240），受机构资金和限仓约束。趋势/突破阶段参数未降低；报价参考加速跟随到 120bps/秒，避免通过把市场压平来消除影线。上述保护约束单次报价和机器人订单，**不限制一段趋势的累计涨跌幅**。
 
 机器人不再无保护扫到品种价格上下界，旧机器人挂单在恢复后重新报价；清理只识别确定性的机器人 UUID，不撤玩家挂单。撮合仍按真实对手价成交，OHLC 高低价不做裁剪。旧的插针历史会随新行情自然滚出窗口，通常需要约一两分钟。
 
-Python 撮合对照：`PYTHONDONTWRITEBYTECODE=1 python3 tools/simulate_microstructure.py`。默认对照旧组合与新组合，4 个种子各 10 分钟，报告在 `build/reports/microstructure/`。按“单侧影线至少 30bps 且至少为实体 3 倍”统计，异常长影线 102→0；新组合每 10 分钟模拟成交约 878–1019 万张，较大实体幅度（95%分位）仍约 1.73%–2.03%。这不是 Java/MC 实测，模型未完整接入保证金/手续费账本；本轮仍只编译打包，交由用户人工体验。
+此前 10 倍盘口版本的 Python 撮合对照：`PYTHONDONTWRITEBYTECODE=1 python3 tools/simulate_microstructure.py`。默认对照旧组合与新组合，4 个种子各 10 分钟，报告在 `build/reports/microstructure/`。按“单侧影线至少 30bps 且至少为实体 3 倍”统计，异常长影线 102→0；新组合每 10 分钟模拟成交约 878–1019 万张，较大实体幅度（95%分位）仍约 1.73%–2.03%。这不是 Java/MC 实测，模型未完整接入保证金/手续费账本；本轮仍只编译打包，交由用户人工体验。
+
+## 最新走势微调
+
+趋势目标从匀速直线改为缓入缓出，加入跨阶段保留的短期相关扰动，让趋势中可以有回撤和停顿。突破推进窗口由阶段前 22% 改为前 55%，预期幅度仍为原设置。方向压力平滑并在阶段首尾淡入淡出；做市方向溢价只保留少量基点，并独立平滑，不再叠加一大段阶段涨幅后在切换时突然撤回。真实成交与 OHLC 不做裁剪。
+
+本次按用户要求直接修改 Java、只编译打包；未运行 Python、JUnit 或 MC，未给出新模拟统计，等待人工体验。

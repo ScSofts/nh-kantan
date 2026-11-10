@@ -43,7 +43,7 @@ public final class SimulatedInstrument {
         public double fairNoiseMemory = 0.85;
         public double fairNoiseLimitMultiplier = 3.0;
 
-        public int makerQuoteSizeMultiplier = 10;
+        public int makerQuoteSizeMultiplier = 3;
         public double makerIntervalScale = 0.4;
         public int whaleMaxOrderContracts = 5000;
         public int makerSpreadBps = 10;

@@ -88,7 +88,7 @@ public class RealisticConfig {
     public static double botMaxLiquidityFraction;
 
     @Config.Comment("Extra size multiplier for passive market-maker orders only; ordinary bot trades keep their base size.")
-    @Config.DefaultInt(10)
+    @Config.DefaultInt(3)
     @Config.RangeInt(min = 1, max = 100)
     public static int makerQuoteSizeMultiplier;
 
@@ -264,6 +264,10 @@ public class RealisticConfig {
         if (maintenanceMarginBps > initialMarginBps) {
             maintenanceMarginBps = initialMarginBps / 2;
             corrected("maintenanceMarginBps");
+        }
+        if (makerQuoteSizeMultiplier == 10) {
+            makerQuoteSizeMultiplier = 3;
+            NHKantan.LOG.info("Adjusted former 10x market-maker default to 3x quote size");
         }
         int minimumBand = Math.max(makerSpreadBps, botMaxSlippageBps);
         if (automatedQuoteBandBps < minimumBand) {
