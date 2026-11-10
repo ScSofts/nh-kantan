@@ -96,11 +96,13 @@ public final class ExchangeRuntime implements AutoCloseable {
         private Map<UUID, Long> requests;
         private String options;
         private String notifications;
+        private Map<UUID, java.util.Set<String>> liquidationNotified;
         private Map<String, Map<UUID, Integer>> closing;
     }
 
     private final MarketWorker worker;
     private MarketNotices notices = new MarketNotices();
+    private final Map<UUID, java.util.Set<String>> liquidationNotified = new LinkedHashMap<>();
     private final UUID generation = UUID.randomUUID();
 
     private static final class Reply {
@@ -195,6 +197,15 @@ public final class ExchangeRuntime implements AutoCloseable {
                                 throw new IllegalArgumentException("Invalid pending close owner");
                         closing.put(entry.getKey(), new LinkedHashMap<>(entry.getValue()));
                     }
+                if (saved.liquidationNotified != null) {
+                    for (Map.Entry<UUID, java.util.Set<String>> event : saved.liquidationNotified.entrySet()) {
+                        if (!ledger.hasAccount(event.getKey()) || event.getValue() == null
+                            || !instruments.keySet()
+                                .containsAll(event.getValue()))
+                            throw new IllegalArgumentException("Invalid saved liquidation notice state");
+                        liquidationNotified.put(event.getKey(), new java.util.LinkedHashSet<>(event.getValue()));
+                    }
+                }
                 restoredTick = saved.gameTick;
             }
             for (SimulatedInstrument instrument : instruments.values()) instrument.notifications(notices);
@@ -232,17 +243,39 @@ public final class ExchangeRuntime implements AutoCloseable {
     }
 
     private void marginCycle() {
-        if (maintenanceRatio == 0) return;
+        if (maintenanceRatio == 0) {
+            liquidationNotified.clear();
+            return;
+        }
         for (UUID owner : ledger.owners()) {
             MarginLedger.AccountView account = ledger.account(owner);
             if (account.usedMargin == 0
-                || account.equity - account.pendingCredit >= account.usedMargin * maintenanceRatio) continue;
+                || account.equity - account.pendingCredit >= account.usedMargin * maintenanceRatio) {
+                liquidationNotified.remove(owner);
+                continue;
+            }
             for (Map.Entry<String, SimulatedInstrument> entry : instruments.entrySet()) {
                 SimulatedInstrument instrument = entry.getValue();
                 for (OrderBook.Order order : instrument.orders(owner)) instrument.cancel(owner, order.id);
                 long quantity = ledger.position(owner, entry.getKey()).quantity;
-                if (quantity == 0) continue;
+                if (quantity == 0) {
+                    java.util.Set<String> notified = liquidationNotified.get(owner);
+                    if (notified != null) notified.remove(entry.getKey());
+                    continue;
+                }
                 SimulatedInstrument.Snapshot market = instrument.snapshot(worker.gameTick());
+                if (!ledger.isInstitution(owner)
+                    && liquidationNotified.computeIfAbsent(owner, key -> new java.util.LinkedHashSet<>())
+                        .add(entry.getKey()))
+                    notices.record(
+                        owner,
+                        MarketNotices.Kind.LIQUIDATION_TRIGGERED,
+                        entry.getKey(),
+                        worker.gameTick(),
+                        Math.abs(quantity),
+                        market.lastPrice,
+                        0,
+                        0);
                 instrument.submit(
                     owner,
                     quantity > 0 ? OrderBook.Side.SELL : OrderBook.Side.BUY,
@@ -642,6 +675,7 @@ public final class ExchangeRuntime implements AutoCloseable {
             saved.requests = requests.checkpoint();
             saved.options = options.checkpoint();
             saved.notifications = notices.checkpoint();
+            saved.liquidationNotified = liquidationNotified;
             saved.closing = closing;
             saved.instruments = new LinkedHashMap<>();
             for (Map.Entry<String, SimulatedInstrument> entry : instruments.entrySet()) {

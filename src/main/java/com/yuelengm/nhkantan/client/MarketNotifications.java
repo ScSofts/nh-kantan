@@ -152,7 +152,8 @@ public final class MarketNotifications {
             .playSound(
                 PositionedSoundRecord.func_147674_a(
                     new ResourceLocation("random.orb"),
-                    entry.notice.kind == MarketNotices.Kind.STOP_TRIGGERED ? 0.65F : 1.2F));
+                    (entry.notice.kind == MarketNotices.Kind.STOP_TRIGGERED
+                        || entry.notice.kind == MarketNotices.Kind.LIQUIDATION_TRIGGERED) ? 0.65F : 1.2F));
     }
 
     private String frameName(String id) {

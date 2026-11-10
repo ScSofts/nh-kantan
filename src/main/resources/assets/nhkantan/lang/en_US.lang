@@ -187,3 +187,9 @@ gui.nhkantan.exchange.status.invalid_order=Invalid account, price or order
 gui.nhkantan.exchange.status.arithmetic_limit=Monetary calculation limit exceeded
 
 gui.nhkantan.exchange.status.no_liquidity=No executable counterparty within the price protection range
+
+notification.nhkantan.liquidation_triggered.title=Forced liquidation triggered
+
+notification.nhkantan.liquidation_triggered.body=%s / Liquidation target: %s contracts
+
+notification.nhkantan.liquidation_triggered.detail=Reference %s NHC / Book execution may be partial

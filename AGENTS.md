@@ -249,3 +249,8 @@ python3 /workspace/.cloud-setup/server-status.py
 
 - 千倍交易配套修复：默认 initialMarginBps=10（0.1%）、maintenanceMarginBps=5、maxPosition=10000000；可配置玩家限仓范围1–1000000000。limitsConfigVersion=0时，仅将旧默认1000/500/1000分别迁移为10/5/10000000，写入版本1并通过GTNHLib保存配置，之后不再覆盖自定义值。旧世界在恢复订单前同时应用保证金率和玩家限仓，机构限仓不变。UI区分账户实际杠杆、品种理论杠杆、每品种限仓；拒单区分限仓、资金不足、减仓数量、参数、计算范围、无对手盘。理论1000倍仍受手续费、整数分取整、卖单按价格上界预留、可用资金和有限盘口约束，不能保证每笔达到1000倍或全部成交。
 - 截图900张再买200被旧1000张上限拦截，0.74倍本身计算正确；修复与行情算法无关，15秒图与通知沿用。仅spotlessApply assemble，未运行Java测试/MC；产物build/libs/nhkantan-1000x-fix.jar。
+
+### 强平通知补全（2026-11-10）
+
+- 强平通知：marginCycle在保证金不足时为每个玩家/品种首次强平触发创建LIQUIDATION_TRIGGERED私人事件，进入既有AE浮窗与声音通道，不按页面抑制。目标数量与触发参考价不代表已经全部成交。连续强平/部分成交重试不重复刷屏；去重状态随检查点保存，风险恢复或空仓后复位，之后新风险可再次提醒；机器人不写玩家通知。枚举追加到末尾，保留旧事件序号。
+- 本次只spotlessApply assemble，未运行Java/MC测试，实际浮窗和音效待人工确认。产物build/libs/nhkantan-liquidation-notify.jar。

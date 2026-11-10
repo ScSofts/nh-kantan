@@ -88,6 +88,10 @@ public final class MarginLedger {
         return accounts.containsKey(owner);
     }
 
+    public boolean isInstitution(UUID owner) {
+        return requireAccount(owner).institutionalPositionLimit > 0;
+    }
+
     /** Server-owned institution setup. Only the capital increase is granted once, never reset after losses. */
     public void provisionInstitution(UUID owner, long capital, long legacyCapital, long positionLimit) {
         if (capital < 1 || legacyCapital < 1 || positionLimit < 1 || positionLimit > 1000000)

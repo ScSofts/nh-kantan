@@ -187,3 +187,9 @@ gui.nhkantan.exchange.status.invalid_order=账户、价格或订单参数无效
 gui.nhkantan.exchange.status.arithmetic_limit=金额超出安全计算范围
 
 gui.nhkantan.exchange.status.no_liquidity=价格保护范围内暂无可成交对手单，订单未成交
+
+notification.nhkantan.liquidation_triggered.title=强制平仓已触发
+
+notification.nhkantan.liquidation_triggered.body=%s · 风险减仓目标 %s 张
+
+notification.nhkantan.liquidation_triggered.detail=触发参考价 %s NHC · 按盘口成交，可能部分成交

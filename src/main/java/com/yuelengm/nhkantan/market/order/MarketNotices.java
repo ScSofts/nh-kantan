@@ -15,7 +15,8 @@ public final class MarketNotices {
     public enum Kind {
         STOP_TRIGGERED,
         TAKE_FILLED,
-        OPTION_EXPIRED
+        OPTION_EXPIRED,
+        LIQUIDATION_TRIGGERED
     }
 
     public static final class Notice {
