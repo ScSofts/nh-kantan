@@ -10,6 +10,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
+import net.minecraft.util.StatCollector;
 
 import com.cleanroommc.modularui.api.IGuiHolder;
 import com.cleanroommc.modularui.api.drawable.IKey;
@@ -83,10 +84,7 @@ public final class ExchangeGui implements IGuiHolder<GuiData> {
             .height(20)
             .childPadding(3)
             .child(
-                Widgets.text(
-                    IKey.str(
-                        "§b◆ §f" + IKey.lang("gui.nhkantan.exchange.title")
-                            .get()))
+                Widgets.text(IKey.comp(IKey.str("§b◆ §f"), IKey.lang("gui.nhkantan.exchange.title")))
                     .expanded())
             .child(button("trade_tab", () -> state.page = 0))
             .child(button("wallet_tab", () -> sync.callSyncedAction("exchange_wallet_open", packet -> {})))
@@ -131,10 +129,7 @@ public final class ExchangeGui implements IGuiHolder<GuiData> {
                 new Rectangle().color(0xFF345675),
                 new Rectangle().color(0xFF64D9E9)
                     .hollow(1))
-            .overlay(
-                IKey.str(
-                    "§f" + IKey.lang("gui.nhkantan.exchange." + key)
-                        .get()))
+            .overlay(IKey.comp(IKey.str("§f"), IKey.lang("gui.nhkantan.exchange." + key)))
             .onMousePressed(GuiActions.leftClick(action));
     }
 
@@ -333,16 +328,14 @@ public final class ExchangeGui implements IGuiHolder<GuiData> {
         }
 
         private String feedbackText() {
-            if (!localError.isEmpty()) return "§c" + IKey.lang("gui.nhkantan.exchange.invalid_input")
-                .get();
+            if (!localError.isEmpty())
+                return "§c" + StatCollector.translateToLocalFormatted("gui.nhkantan.exchange.invalid_input");
             String code = feedback.getStringValue();
             return (!code.isEmpty() && !"OK".equals(code) && !"PENDING".equals(code) ? "§c"
                 : "PENDING".equals(code) ? "§e" : "§b")
-                + IKey
-                    .lang(
-                        "gui.nhkantan.exchange.status."
-                            + (code.isEmpty() ? "ready" : code.toLowerCase(java.util.Locale.ROOT)))
-                    .get();
+                + StatCollector.translateToLocalFormatted(
+                    "gui.nhkantan.exchange.status."
+                        + (code.isEmpty() ? "ready" : code.toLowerCase(java.util.Locale.ROOT)));
         }
 
         private String effectiveLeverage() {
@@ -357,27 +350,23 @@ public final class ExchangeGui implements IGuiHolder<GuiData> {
             String value = gross == 0 ? "0.00"
                 : account.account.equity <= 0 ? "∞"
                     : String.format(java.util.Locale.ROOT, "%.2f", gross / account.account.equity);
-            return IKey
-                .lang(
-                    "gui.nhkantan.exchange.leverage_limits",
-                    value,
-                    String.format(java.util.Locale.ROOT, "%.0f", 10000D / frame.marginBps),
-                    frame.maxPosition)
-                .get();
+            return StatCollector.translateToLocalFormatted(
+                "gui.nhkantan.exchange.leverage_limits",
+                value,
+                String.format(java.util.Locale.ROOT, "%.0f", 10000D / frame.marginBps),
+                frame.maxPosition);
         }
 
         private String summary() {
-            if (account == null || account.account == null) return IKey.lang("gui.nhkantan.exchange.loading")
-                .get();
+            if (account == null || account.account == null)
+                return StatCollector.translateToLocalFormatted("gui.nhkantan.exchange.loading");
             MarginLedger.AccountView value = account.account;
-            return IKey
-                .lang(
-                    "gui.nhkantan.exchange.summary",
-                    CurrencyFormat.amount(value.cash),
-                    CurrencyFormat.amount(value.equity),
-                    CurrencyFormat.amount(value.available),
-                    CurrencyFormat.amount(value.frozen))
-                .get();
+            return StatCollector.translateToLocalFormatted(
+                "gui.nhkantan.exchange.summary",
+                CurrencyFormat.amount(value.cash),
+                CurrencyFormat.amount(value.equity),
+                CurrencyFormat.amount(value.available),
+                CurrencyFormat.amount(value.frozen));
         }
 
         private void refresh(Flow container) {
@@ -610,11 +599,9 @@ public final class ExchangeGui implements IGuiHolder<GuiData> {
                                                 (order.side == OrderBook.Side.BUY ? "§a" : "§c")
                                                     + instrumentName(entry.getKey())
                                                     + " "
-                                                    + IKey
-                                                        .lang(
-                                                            "gui.nhkantan.exchange."
-                                                                + (order.side == OrderBook.Side.BUY ? "buy" : "sell"))
-                                                        .get()
+                                                    + StatCollector.translateToLocalFormatted(
+                                                        "gui.nhkantan.exchange."
+                                                            + (order.side == OrderBook.Side.BUY ? "buy" : "sell"))
                                                     + " "
                                                     + order.remaining
                                                     + " @ "
@@ -751,12 +738,12 @@ public final class ExchangeGui implements IGuiHolder<GuiData> {
         private String protectionPreview() {
             try {
                 long[] targets = protectionTargets();
-                return IKey
-                    .lang("gui.nhkantan.exchange.protection_preview", tickPrice(targets[0]), tickPrice(targets[1]))
-                    .get();
+                return StatCollector.translateToLocalFormatted(
+                    "gui.nhkantan.exchange.protection_preview",
+                    tickPrice(targets[0]),
+                    tickPrice(targets[1]));
             } catch (RuntimeException e) {
-                return IKey.lang("gui.nhkantan.exchange.protection_hint")
-                    .get();
+                return StatCollector.translateToLocalFormatted("gui.nhkantan.exchange.protection_hint");
             }
         }
 
@@ -784,8 +771,7 @@ public final class ExchangeGui implements IGuiHolder<GuiData> {
             if (held != null && held.quantity != 0) lines.add(
                 new ChartLine(
                     held.cost / (double) Math.abs(held.quantity) / 100,
-                    IKey.lang("gui.nhkantan.exchange.position_line")
-                        .get() + " "
+                    StatCollector.translateToLocalFormatted("gui.nhkantan.exchange.position_line") + " "
                         + held.quantity
                         + " "
                         + profit(selected, held),
@@ -796,14 +782,12 @@ public final class ExchangeGui implements IGuiHolder<GuiData> {
                 if (protection.stopPrice > 0) lines.add(
                     new ChartLine(
                         protection.stopPrice * frame.tickValueCents / 100D,
-                        IKey.lang("gui.nhkantan.exchange.stop_line")
-                            .get(),
+                        StatCollector.translateToLocalFormatted("gui.nhkantan.exchange.stop_line"),
                         0xFF647F));
                 if (protection.takePrice > 0) lines.add(
                     new ChartLine(
                         protection.takePrice * frame.tickValueCents / 100D,
-                        IKey.lang("gui.nhkantan.exchange.take_line")
-                            .get(),
+                        StatCollector.translateToLocalFormatted("gui.nhkantan.exchange.take_line"),
                         0x42E5A4));
             }
             if (account.orders != null)
@@ -812,8 +796,7 @@ public final class ExchangeGui implements IGuiHolder<GuiData> {
                     lines.add(
                         new ChartLine(
                             order.price * frame.tickValueCents / 100D,
-                            IKey.lang("gui.nhkantan.exchange.order_line")
-                                .get() + " #"
+                            StatCollector.translateToLocalFormatted("gui.nhkantan.exchange.order_line") + " #"
                                 + order.id
                                 + " ×"
                                 + order.remaining,
@@ -945,10 +928,7 @@ public final class ExchangeGui implements IGuiHolder<GuiData> {
                             .height(18)
                             .background(new Rectangle().color(day == expiryDay ? 0xFF367C94 : 0xFF20314B))
                             .hoverBackground(new Rectangle().color(0xFF3C6885))
-                            .overlay(
-                                IKey.str(
-                                    "§f" + IKey.lang("gui.nhkantan.exchange.expiry_tab", day)
-                                        .get()))
+                            .overlay(IKey.comp(IKey.str("§f"), IKey.lang("gui.nhkantan.exchange.expiry_tab", day)))
                             .onMousePressed(GuiActions.leftClick(() -> {
                                 expiryDay = day;
                                 renderedPage = -1;
@@ -1104,8 +1084,8 @@ public final class ExchangeGui implements IGuiHolder<GuiData> {
                 .overlay(
                     IKey.dynamic(
                         () -> "§f"
-                            + IKey.lang("gui.nhkantan.exchange." + (exercise ? "exercise_option" : "close_option"))
-                                .get()
+                            + StatCollector.translateToLocalFormatted(
+                                "gui.nhkantan.exchange." + (exercise ? "exercise_option" : "close_option"))
                             + " ≈"
                             + CurrencyFormat.amount(exitPayout(holding, exercise))))
                 .addTooltipLine(
@@ -1146,17 +1126,14 @@ public final class ExchangeGui implements IGuiHolder<GuiData> {
                     return quote == null ? "§7—"
                         : (call ? "§a" : "§d") + CurrencyFormat.amount(quote.unitCents)
                             + " §f"
-                            + IKey.lang("gui.nhkantan.exchange.buy")
-                                .get();
+                            + StatCollector.translateToLocalFormatted("gui.nhkantan.exchange.buy");
                 }))
                 .addTooltipLine(IKey.dynamic(() -> {
                     OptionMarket.Quote quote = contract == null || account.quotes == null ? null
                         : account.quotes.get(contract.id);
-                    return IKey
-                        .lang(
-                            "gui.nhkantan.exchange.buyback_quote",
-                            quote == null ? "—" : CurrencyFormat.amount(quote.bidUnitCents))
-                        .get();
+                    return StatCollector.translateToLocalFormatted(
+                        "gui.nhkantan.exchange.buyback_quote",
+                        quote == null ? "—" : CurrencyFormat.amount(quote.bidUnitCents));
                 }))
                 .onMousePressed(GuiActions.leftClick(() -> buyOption(contract)));
         }
@@ -1181,8 +1158,9 @@ public final class ExchangeGui implements IGuiHolder<GuiData> {
         private String remainingDays(long expiry) {
             ClientExchangeData.Frame frame = ClientExchangeData.get();
             double days = Math.max(0, expiry - (frame == null ? 0 : frame.gameTick)) / 24000D;
-            return IKey.lang("gui.nhkantan.exchange.days", String.format(java.util.Locale.ROOT, "%.2f", days))
-                .get();
+            return StatCollector.translateToLocalFormatted(
+                "gui.nhkantan.exchange.days",
+                String.format(java.util.Locale.ROOT, "%.2f", days));
         }
     }
 }

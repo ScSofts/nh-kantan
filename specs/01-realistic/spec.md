@@ -2137,3 +2137,5 @@ plan.md 的 D01–D10 是建议实施决策，涵盖旧仓迁移、会计口径�
 千倍交易配套修复：默认 initialMarginBps=10（0.1%）、maintenanceMarginBps=5、maxPosition=10000000；可配置玩家限仓范围1–1000000000。limitsConfigVersion=0时，仅将旧默认1000/500/1000分别迁移为10/5/10000000，写入版本1并通过GTNHLib保存配置，之后不再覆盖自定义值。旧世界在恢复订单前同时应用保证金率和玩家限仓，机构限仓不变。UI区分账户实际杠杆、品种理论杠杆、每品种限仓；拒单区分限仓、资金不足、减仓数量、参数、计算范围、无对手盘。理论1000倍仍受手续费、整数分取整、卖单按价格上界预留、可用资金和有限盘口约束，不能保证每笔达到1000倍或全部成交。 本次仅编译打包，未运行模拟或Java/MC测试，不调整行情算法。产物build/libs/nhkantan-1000x-fix.jar。
 
 强平通知：marginCycle在保证金不足时为每个玩家/品种首次强平触发创建LIQUIDATION_TRIGGERED私人事件，进入既有AE浮窗与声音通道，不按页面抑制。目标数量与触发参考价不代表已经全部成交。连续强平/部分成交重试不重复刷屏；去重状态随检查点保存，风险恢复或空仓后复位，之后新风险可再次提醒；机器人不写玩家通知。枚举追加到末尾，保留旧事件序号。 仅编译打包，未运行Java/MC测试，产物build/libs/nhkantan-liquidation-notify.jar。
+
+修复ExchangeGui共享buildUI中的客户端翻译泄漏：标题、通用按钮、期权期限标签改用IKey.comp组合延迟语言键，不提前调用LangKey.get；需要产出String的动态文字统一使用Minecraft公共侧StatCollector，避开ModularUI的ClientScreenHandler.getTicks缓存。buildUI仍在两端构建同步结构，createScreen保留客户端隔离。只做spotlessApply/checkstyleMain/assemble，不运行测试或MC，未以真实专用服务器复现验收；不改行情、账户或同步协议。 产物build/libs/nhkantan-server-gui-fix.jar。
